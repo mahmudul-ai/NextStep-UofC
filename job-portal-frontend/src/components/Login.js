@@ -1,12 +1,15 @@
 // src/components/Login.js
 import React, { useState } from 'react';
 import { Container, Row, Col, Card, Form, Button } from 'react-bootstrap';
+import { useNavigate } from 'react-router-dom'; // Import useNavigate
 import api from '../services/api';
 
 function Login({ setToken }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError]       = useState('');
+  
+  const navigate = useNavigate();  // Initialize the hook
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -15,17 +18,18 @@ function Login({ setToken }) {
       const token = response.data.access;
       localStorage.setItem('accessToken', token);
       localStorage.setItem('userRole', 'recruiter'); // or 'job_seeker'
-      // Save the username from the input in localStorage:
       localStorage.setItem('username', username);
       
       setToken(token);
       setError('');
+      
+      // Redirect to Browse Jobs page after login success:
+      navigate('/browse');
     } catch (err) {
       console.error("Login failed", err);
       setError('Login failed. Please check your credentials.');
     }
   };
-  
 
   return (
     <Container className="py-5">
