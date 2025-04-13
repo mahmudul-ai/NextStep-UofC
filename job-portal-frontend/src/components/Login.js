@@ -15,6 +15,8 @@ function Login({ setToken }) {
       const token = response.data.access;
       localStorage.setItem('accessToken', token);
       localStorage.setItem('userRole', 'recruiter'); // or 'job_seeker'
+      // Save the username from the input in localStorage:
+      localStorage.setItem('username', username);
       
       setToken(token);
       setError('');
@@ -23,6 +25,7 @@ function Login({ setToken }) {
       setError('Login failed. Please check your credentials.');
     }
   };
+  
 
   return (
     <Container className="py-5">

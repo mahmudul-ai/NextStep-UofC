@@ -4,12 +4,13 @@ import { Navbar, Nav, Container, Button } from 'react-bootstrap';
 import { NavLink } from 'react-router-dom';
 
 function NavigationBar({ token, setToken }) {
-  // For demonstration, let's assume we store the role in localStorage after login.
   const userRole = localStorage.getItem('userRole'); // e.g., "recruiter" or "job_seeker"
+  const username = localStorage.getItem('username'); // set during login
 
   const handleLogout = () => {
     localStorage.removeItem('accessToken');
     localStorage.removeItem('userRole');
+    localStorage.removeItem('username');
     setToken('');
   };
 
@@ -26,7 +27,14 @@ function NavigationBar({ token, setToken }) {
                 {userRole === 'recruiter' && (
                   <Nav.Link as={NavLink} to="/manage">Manage Jobs</Nav.Link>
                 )}
-                <Button variant="outline-light" onClick={handleLogout}>Logout</Button>
+                {username && (
+                  <Nav.Link as={NavLink} to="/account" className="me-3">
+                    Signed in as: <strong>{username}</strong>
+                  </Nav.Link>
+                )}
+                <Button variant="outline-light" onClick={handleLogout}>
+                  Logout
+                </Button>
               </>
             ) : (
               <>
