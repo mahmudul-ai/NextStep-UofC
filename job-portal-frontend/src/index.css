@@ -11,3 +11,21 @@ code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
 }
+
+.bg-primary,
+.btn-primary,
+.navbar.bg-primary,
+.navbar-dark.bg-primary {
+  background-color: #4a69bd !important;
+  border-color: #4a69bd !important;
+}
+
+
+.btn-primary {
+  color: #fff !important;
+}
+
+.btn-primary:hover {
+  background-color: #3a59a0 !important;
+  border-color: #3a59a0 !important;
+}

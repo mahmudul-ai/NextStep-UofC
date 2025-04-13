@@ -6,6 +6,7 @@ import Register from './components/Register';
 import Login from './components/Login';
 import ManageJobs from './components/ManageJobs';
 import HomePage from './components/HomePage'; 
+import './index.css';
 
 function App() {
   return (
@@ -17,6 +18,7 @@ function App() {
         <Route path="/register" element={<Register />} />
         <Route path="/login" element={<Login />} />
         <Route path="/manage-jobs" element={<ManageJobs />} />
+        <Route path="/browse" element={<BrowseJobs />} />
       </Routes>
     </Router>
   );
