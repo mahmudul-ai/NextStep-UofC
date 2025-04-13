@@ -14,10 +14,6 @@ function Login({ setToken }) {
       const response = await api.post('/token/', { username, password });
       const token = response.data.access;
       localStorage.setItem('accessToken', token);
-
-      // Assuming the backend returns user info or you have a separate endpoint to fetch it,
-      // for now, you can manually set the role.
-      // For testing, if you're logging in as a recruiter, store that:
       localStorage.setItem('userRole', 'recruiter'); // or 'job_seeker'
       
       setToken(token);

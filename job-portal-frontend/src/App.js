@@ -2,11 +2,11 @@
 import React, { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import NavigationBar from './components/NavigationBar';
+import BrowseJobs from './components/BrowseJobs';
 import Register from './components/Register';
 import Login from './components/Login';
-import BrowseJobs from './components/BrowseJobs';
 import ManageJobs from './components/ManageJobs';
-import './App.css';
+import HomePage from './components/HomePage'; 
 
 function App() {
   // For simplicity we use a token for authentication.
@@ -17,8 +17,11 @@ function App() {
     <Router>
       <NavigationBar token={token} setToken={setToken} />
       <Routes>
+        <Route path="/" element={<HomePage />} />           
+        <Route path="/jobs" element={<BrowseJobs />} />
         <Route path="/register" element={<Register />} />
         <Route path="/login" element={<Login setToken={setToken} />} />
+        <Route path="/manage-jobs" element={<ManageJobs />} />
         <Route path="/browse" element={<BrowseJobs />} />
         <Route path="/manage" element={<ManageJobs />} />
         <Route path="/" element={<BrowseJobs />} />
