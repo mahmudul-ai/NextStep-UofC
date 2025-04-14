@@ -18,7 +18,7 @@ function ManageJobs() {
   // Fetch only the recruiter's jobs from backend (automatically filtered by backend)
   const fetchJobs = async () => {
     try {
-      const response = await api.get('/jobs/');
+      const response = await api.get('/jobs/?mine=true'); // Shows only my jobs
       setJobs(response.data); // Set job list in state
     } catch (err) {
       console.error(err);

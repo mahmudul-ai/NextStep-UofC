@@ -18,18 +18,16 @@ class JobViewSet(viewsets.ModelViewSet):
     # This dynamically controls what jobs are shown
     def get_queryset(self):
         user = self.request.user
+        request = self.request
 
-        # If it's a read-only request (GET), we check where it's coming from
-        if self.request.method in SAFE_METHODS:
-            # 📍 Special case: if a recruiter is viewing from /manage, show only their jobs
-            if user.is_authenticated and user.user_type == 'recruiter' and self.request.path.startswith('/api/jobs'):
+    # If recruiter explicitly passed ?mine=true, return their own jobs only
+        if user.is_authenticated and user.user_type == 'recruiter':
+            if request.query_params.get('mine') == 'true':
                 return Job.objects.filter(posted_by=user)
 
-            # For browsing publicly (like on /browse), return everything
-            return Job.objects.all()
+    # For all other cases (including recruiters browsing), return all jobs
+        return Job.objects.all()
 
-        # For writes (POST, PUT, DELETE) — only their own jobs
-        return Job.objects.filter(posted_by=user)
 
     def perform_create(self, serializer):
         user = self.request.user
