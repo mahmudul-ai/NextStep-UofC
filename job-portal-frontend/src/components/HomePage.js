@@ -1,21 +1,29 @@
+// Import React and routing/styling tools
 import React from 'react';
 import { Link } from 'react-router-dom';
-import './HomePage.css'; // We'll style this separately
+import './HomePage.css'; // External CSS for styling the homepage
 
+// Functional component for the homepage
 const HomePage = () => {
   return (
     <div className="home-container">
+      
+      {/* Hero section: eye-catching intro with main CTA */}
       <section className="hero">
         <h1>Find Your Dream Career</h1>
         <p>
           UCalgary Job Board connects University of Calgary students with employers for internships, part-time, and full-time opportunities.
         </p>
         <div className="hero-buttons">
+          {/* Primary CTA: takes user to job listings */}
           <Link to="/jobs" className="primary-btn">Browse Jobs</Link>
+
+          {/* Secondary CTA: leads to account creation */}
           <Link to="/register" className="secondary-btn">Create Account</Link>
         </div>
       </section>
 
+      {/* Features section: explains how the platform works */}
       <section className="features">
         <h2>How It Works</h2>
         <div className="feature-grid">
@@ -37,6 +45,7 @@ const HomePage = () => {
         </div>
       </section>
 
+      {/* CTA for employers to sign up and start posting */}
       <section className="cta">
         <h2>For Employers</h2>
         <p>
@@ -45,6 +54,7 @@ const HomePage = () => {
         <Link to="/register" className="cta-btn">Get Started</Link>
       </section>
 
+      {/* Stats section to showcase platform impact and credibility */}
       <section className="stats">
         <h2>UCalgary Job Board Impact</h2>
         <div className="stats-grid">

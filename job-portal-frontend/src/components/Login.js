@@ -1,29 +1,34 @@
-// src/components/Login.js
+// Import React tools and components for layout, form, and navigation
 import React, { useState } from 'react';
 import { Container, Row, Col, Card, Form, Button } from 'react-bootstrap';
-import { useNavigate } from 'react-router-dom'; // Import useNavigate
-import api from '../services/api';
+import { useNavigate } from 'react-router-dom'; // Hook for programmatic navigation
+import api from '../services/api'; // Axios instance for backend API calls
 
 function Login({ setToken }) {
+  // State for login form inputs and error message
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError]       = useState('');
+  const [error, setError] = useState('');
   
-  const navigate = useNavigate();  // Initialize the hook
+  const navigate = useNavigate();  // Hook to redirect user after login
 
+  // Handle login form submission
   const handleLogin = async (e) => {
     e.preventDefault();
     try {
+      // Send login credentials to backend token endpoint
       const response = await api.post('/token/', { username, password });
       const token = response.data.access;
+
+      // Store token and user info in localStorage
       localStorage.setItem('accessToken', token);
-      localStorage.setItem('userRole', 'recruiter'); // or 'job_seeker'
+      localStorage.setItem('userRole', 'recruiter'); // For now hardcoded; ideally set this from backend
       localStorage.setItem('username', username);
-      
-      setToken(token);
-      setError('');
-      
-      // Redirect to Browse Jobs page after login success:
+
+      setToken(token); // Update parent state if needed (e.g., for auth context)
+      setError('');    // Clear any previous errors
+
+      // Redirect user to job listings page after successful login
       navigate('/browse');
     } catch (err) {
       console.error("Login failed", err);
@@ -38,7 +43,11 @@ function Login({ setToken }) {
           <Card className="p-4 shadow">
             <Card.Body>
               <h3 className="mb-4 text-center">Login</h3>
+
+              {/* Show error message if login fails */}
               {error && <p className="text-danger text-center">{error}</p>}
+
+              {/* Login form */}
               <Form onSubmit={handleLogin}>
                 <Form.Group className="mb-3">
                   <Form.Label>Username</Form.Label>
@@ -58,10 +67,14 @@ function Login({ setToken }) {
                     required
                   />
                 </Form.Group>
+
+                {/* Submit button spans full width */}
                 <div className="d-grid">
                   <Button variant="primary" type="submit">Login</Button>
                 </div>
               </Form>
+
+              {/* Registration link */}
               <div className="mt-3 text-center">
                 Don't have an account? <a href="/register">Register here</a>
               </div>

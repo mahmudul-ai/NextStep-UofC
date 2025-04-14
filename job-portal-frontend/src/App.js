@@ -1,6 +1,8 @@
-// src/App.js
+// Import React and required routing components
 import React, { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+
+// Import custom components
 import NavigationBar from './components/NavigationBar';
 import BrowseJobs from './components/BrowseJobs';
 import Register from './components/Register';
@@ -10,22 +12,27 @@ import HomePage from './components/HomePage';
 import Account from './components/Account';
 
 function App() {
-  // For simplicity we use a token for authentication.
-  // In a real-world scenario, you'd also want to store user role information.
+  // Store authentication token (read from localStorage initially)
+  // Used to determine if a user is logged in
   const [token, setToken] = useState(localStorage.getItem('accessToken') || '');
+
+  // Optionally store current user info (can be expanded later)
   const [user, setUser] = useState(null);
+
   return (
     <Router>
+      {/* Top navigation bar, shared across all pages */}
       <NavigationBar token={token} user={user} setToken={setToken} />
+
+      {/* Define all application routes */}
       <Routes>
-        <Route path="/" element={<HomePage />} />           
+        <Route path="/" element={<HomePage />} />
         <Route path="/jobs" element={<BrowseJobs />} />
         <Route path="/register" element={<Register />} />
         <Route path="/login" element={<Login setToken={setToken} setUser={setUser} />} />
         <Route path="/manage-jobs" element={<ManageJobs />} />
         <Route path="/browse" element={<BrowseJobs />} />
         <Route path="/manage" element={<ManageJobs />} />
-        <Route path="/" element={<BrowseJobs />} />
         <Route path="/account" element={<Account />} />
       </Routes>
     </Router>

@@ -1,19 +1,20 @@
-// src/components/Account.js
+// Import necessary React hooks and UI components
 import React, { useState, useEffect } from 'react';
 import { Container, Row, Col, Form, Button, Card, Alert } from 'react-bootstrap';
 import api from '../services/api';
 
 function Account() {
-  // Assume that the username is stored in localStorage and that other details can be fetched from your backend.
+  // Grab the username from localStorage — this assumes it's already stored during login
   const storedUsername = localStorage.getItem('username');
 
+  // State hooks for user details and UI messages
   const [username, setUsername] = useState(storedUsername || '');
   const [bio, setBio] = useState('');
   const [pdfFile, setPdfFile] = useState(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
-  // Fetch existing account details from the backend when the component mounts.
+  // On initial render, fetch user details from the backend
   useEffect(() => {
     const fetchAccountDetails = async () => {
       try {
@@ -21,7 +22,7 @@ function Account() {
         const response = await api.get('/account/', {
           headers: { Authorization: `Bearer ${token}` }
         });
-        // Example response: { username, bio }
+        // Set the fetched data into state
         setUsername(response.data.username);
         setBio(response.data.bio);
       } catch (err) {
@@ -33,33 +34,36 @@ function Account() {
     fetchAccountDetails();
   }, []);
 
+  // Handle PDF file selection
   const handleFileChange = (e) => {
     if (e.target.files.length > 0) {
       setPdfFile(e.target.files[0]);
     }
   };
 
+  // Handle form submission to update bio and optional PDF file
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
       const token = localStorage.getItem('accessToken');
-      // Create a FormData object for text and file uploads
+
+      // Use FormData to support sending both text and file data
       const formData = new FormData();
       formData.append('bio', bio);
-      // Append file only if provided
       if (pdfFile) {
         formData.append('pdf', pdfFile);
       }
 
+      // Make a PUT request to update the user profile
       const response = await api.put('/account/', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
           Authorization: `Bearer ${token}`
         }
       });
+
       setMessage('Account updated successfully.');
       setError('');
-      // Optionally, update local state if necessary.
     } catch (err) {
       console.error('Error updating account:', err);
       setError('Failed to update account.');
@@ -74,13 +78,19 @@ function Account() {
           <Card className="shadow-sm">
             <Card.Body>
               <Card.Title className="mb-4">Account Details</Card.Title>
+
+              {/* Success or error messages after submission */}
               {message && <Alert variant="success">{message}</Alert>}
               {error && <Alert variant="danger">{error}</Alert>}
+
               <Form onSubmit={handleSubmit}>
+                {/* Username is shown but not editable */}
                 <Form.Group className="mb-3">
                   <Form.Label>Username</Form.Label>
                   <Form.Control type="text" value={username} readOnly />
                 </Form.Group>
+
+                {/* Editable bio field */}
                 <Form.Group className="mb-3">
                   <Form.Label>Bio</Form.Label>
                   <Form.Control
@@ -91,10 +101,14 @@ function Account() {
                     onChange={(e) => setBio(e.target.value)}
                   />
                 </Form.Group>
+
+                {/* File input for uploading a PDF */}
                 <Form.Group className="mb-3">
                   <Form.Label>Upload PDF</Form.Label>
                   <Form.Control type="file" accept="application/pdf" onChange={handleFileChange} />
                 </Form.Group>
+
+                {/* Submit button */}
                 <Button variant="primary" type="submit">
                   Update Account
                 </Button>
