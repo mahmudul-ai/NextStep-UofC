@@ -14,7 +14,7 @@ def account_view(request):
         return Response({
             "username": user.username,
             "bio": getattr(user, 'bio', ''),  # Use getattr in case 'bio' doesn't exist
-            # You can add more fields here if you need them.
+            "user_type": user.user_type  # <- Add this line
         })
     
     # Handle PUT request: update user's bio and optionally PDF resume

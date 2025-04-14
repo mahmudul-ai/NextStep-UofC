@@ -16,25 +16,32 @@ function Login({ setToken }) {
   const handleLogin = async (e) => {
     e.preventDefault();
     try {
-      // Send login credentials to backend token endpoint
+      // Step 1: Get JWT token
       const response = await api.post('/token/', { username, password });
       const token = response.data.access;
-
-      // Store token and user info in localStorage
+  
+      // Step 2: Save token
       localStorage.setItem('accessToken', token);
-      localStorage.setItem('userRole', 'recruiter'); // For now hardcoded; ideally set this from backend
-      localStorage.setItem('username', username);
-
-      setToken(token); // Update parent state if needed (e.g., for auth context)
-      setError('');    // Clear any previous errors
-
-      // Redirect user to job listings page after successful login
+  
+      // Step 3: Fetch user info to get their role
+      const userResponse = await api.get('/account/', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+  
+      const userData = userResponse.data;
+      localStorage.setItem('userRole', userData.user_type); // <- actual role from backend
+      localStorage.setItem('username', userData.username);
+  
+      // Step 4: Update app state and redirect
+      setToken(token);
+      setError('');
       navigate('/browse');
     } catch (err) {
       console.error("Login failed", err);
       setError('Login failed. Please check your credentials.');
     }
   };
+  
 
   return (
     <Container className="py-5">

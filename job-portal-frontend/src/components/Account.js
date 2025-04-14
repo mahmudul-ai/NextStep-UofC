@@ -53,14 +53,15 @@ function Account() {
       if (pdfFile) {
         formData.append('pdf', pdfFile);
       }
-
-      // Make a PUT request to update the user profile
-      const response = await api.put('/account/', formData, {
+      // Send updated account data (bio and optional PDF) to the backend using a PUT request.
+      // We use multipart/form-data to support file upload, and attach the auth token in the header.
+      await api.put('/account/', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
           Authorization: `Bearer ${token}`
         }
       });
+      
 
       setMessage('Account updated successfully.');
       setError('');

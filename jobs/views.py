@@ -4,26 +4,38 @@ from rest_framework.permissions import IsAuthenticated, SAFE_METHODS
 from rest_framework.exceptions import PermissionDenied
 from .models import Job, Application
 from .serializers import JobSerializer, ApplicationSerializer
+from rest_framework.permissions import BasePermission
+
+# Custom permission: only recruiters can POST, PUT, DELETE
+class IsRecruiterOrReadOnly(BasePermission):
+    def has_permission(self, request, view):
+        if request.method in SAFE_METHODS:
+            return True  # Allow anyone to view jobs
+        return request.user.is_authenticated and request.user.user_type == 'recruiter'
 
 # ViewSet to handle all CRUD operations for Job objects
 class JobViewSet(viewsets.ModelViewSet):
-    queryset = Job.objects.all()  # Fetch all Job records
-    serializer_class = JobSerializer  # Use JobSerializer to handle data representation
+    serializer_class = JobSerializer
+    permission_classes = [IsRecruiterOrReadOnly]
 
-    # Called when a new job is being created via POST
+    def get_queryset(self):
+        user = self.request.user
+        # Allow everyone to view all jobs
+        if self.request.method in SAFE_METHODS:
+            return Job.objects.all()
+
+        # If recruiter is modifying, only allow their own jobs
+        if user.is_authenticated and user.user_type == 'recruiter':
+            return Job.objects.filter(posted_by=user)
+
+        # All others get an empty queryset for write actions
+        return Job.objects.none()
+
     def perform_create(self, serializer):
         user = self.request.user
-        # Enforce that only recruiters can post jobs
         if user.user_type != 'recruiter':
             raise PermissionDenied("Only recruiters can post jobs.")
-        # Save the job and associate it with the current user
         serializer.save(posted_by=user)
-
-    # Custom permissions logic: allow unauthenticated users to view (GET), but restrict other methods
-    def get_permissions(self):
-        if self.request.method in SAFE_METHODS:
-            return []  # No authentication needed for safe methods like GET
-        return [IsAuthenticated()]  # Auth required for POST, PUT, DELETE, etc.
 
 # ViewSet to handle all CRUD operations for Applications
 class ApplicationViewSet(viewsets.ModelViewSet):
