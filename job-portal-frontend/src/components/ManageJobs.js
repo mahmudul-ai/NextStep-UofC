@@ -1,10 +1,10 @@
 // Import necessary React hooks and UI components
 import React, { useState, useEffect } from 'react';
 import { Container, Row, Col, Form, Button, Card } from 'react-bootstrap';
-import api from '../services/api'; // Axios instance for making API requests
+import api from '../services/api'; // Axios instance with token handling
 
 function ManageJobs() {
-  // State for job list and form inputs
+  // State for job list and job form inputs
   const [jobs, setJobs] = useState([]);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -12,66 +12,86 @@ function ManageJobs() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
 
-  // Fetch job listings from the backend
+  // This state tracks which job is being edited (null = add mode)
+  const [editingJobId, setEditingJobId] = useState(null);
+
+  // Fetch only the recruiter's jobs from backend (automatically filtered by backend)
   const fetchJobs = async () => {
     try {
       const response = await api.get('/jobs/');
-      setJobs(response.data); // Store the fetched jobs in state
+      setJobs(response.data); // Set job list in state
     } catch (err) {
       console.error(err);
       setError("Error fetching jobs.");
     }
   };
 
-  // Fetch jobs when the component mounts
+  // Fetch jobs when component mounts
   useEffect(() => {
     fetchJobs();
   }, []);
 
-  // Handler to submit a new job posting
+  // Handler for submitting job form (add or edit depending on state)
   const handleAddJob = async (e) => {
     e.preventDefault();
     try {
-      // Backend sets 'posted_by' automatically based on the logged-in user
-      await api.post('/jobs/', { title, description, location });
+      if (editingJobId) {
+        // Update existing job
+        await api.put(`/jobs/${editingJobId}/`, { title, description, location });
+        setMessage("Job updated successfully.");
+      } else {
+        // Create new job
+        await api.post('/jobs/', { title, description, location });
+        setMessage("Job added successfully.");
+      }
 
-      // Success feedback and reset
-      setMessage("Job added successfully.");
-      setError("");
+      // Clear form and refresh job list
       setTitle('');
       setDescription('');
       setLocation('');
-      fetchJobs(); // Refresh job list
+      setEditingJobId(null);
+      setError('');
+      fetchJobs();
     } catch (err) {
       console.error(err);
-      setError("Failed to add job. Are you sure you're logged in as a recruiter?");
+      setError("Failed to save job.");
+      setMessage('');
     }
   };
 
-  // Handler to delete an existing job
+  // Handler to delete a job
   const handleDeleteJob = async (jobId) => {
     try {
       await api.delete(`/jobs/${jobId}/`);
       setMessage("Job deleted successfully.");
-      setError("");
-      fetchJobs(); // Refresh job list after deletion
+      setError('');
+      fetchJobs();
     } catch (err) {
       console.error(err);
       setError("Failed to delete job.");
     }
   };
 
+  // Handler to begin editing a job — populate form fields
+  const handleEditClick = (job) => {
+    setTitle(job.title);
+    setDescription(job.description);
+    setLocation(job.location);
+    setEditingJobId(job.id);
+  };
+
   return (
     <Container className="py-5">
       <h2 className="mb-4">Manage Jobs</h2>
-      {/* Display success or error messages */}
+
+      {/* Display error or success message */}
       {error && <p className="text-danger">{error}</p>}
       {message && <p className="text-success">{message}</p>}
 
-      {/* Form to add a new job */}
+      {/* Form for adding or editing a job */}
       <Card className="mb-4 shadow-sm">
         <Card.Body>
-          <h4>Add New Job</h4>
+          <h4>{editingJobId ? 'Edit Job' : 'Add New Job'}</h4>
           <Form onSubmit={handleAddJob}>
             <Form.Group className="mb-3">
               <Form.Label>Title</Form.Label>
@@ -83,6 +103,7 @@ function ManageJobs() {
                 required
               />
             </Form.Group>
+
             <Form.Group className="mb-3">
               <Form.Label>Description</Form.Label>
               <Form.Control
@@ -94,6 +115,7 @@ function ManageJobs() {
                 required
               />
             </Form.Group>
+
             <Form.Group className="mb-3">
               <Form.Label>Location</Form.Label>
               <Form.Control
@@ -104,17 +126,39 @@ function ManageJobs() {
                 required
               />
             </Form.Group>
+
+            {/* Submit button */}
             <div className="d-grid">
-              <Button variant="primary" type="submit">Add Job</Button>
+              <Button variant="primary" type="submit">
+                {editingJobId ? 'Update Job' : 'Add Job'}
+              </Button>
             </div>
+
+            {/* Cancel editing button (only shows in edit mode) */}
+            {editingJobId && (
+              <div className="mt-2 text-end">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    setEditingJobId(null);
+                    setTitle('');
+                    setDescription('');
+                    setLocation('');
+                  }}
+                >
+                  Cancel Edit
+                </Button>
+              </div>
+            )}
           </Form>
         </Card.Body>
       </Card>
 
-      {/* List of existing jobs with option to delete each */}
+      {/* Job cards section */}
       <h4>Existing Jobs</h4>
       <Row className="g-4">
-        {jobs.map(job => (
+        {jobs.map((job) => (
           <Col key={job.id} xs={12} md={6} lg={4}>
             <Card className="shadow-sm">
               <Card.Body>
@@ -124,7 +168,16 @@ function ManageJobs() {
                   <small className="text-muted">Location: {job.location}</small>
                 </Card.Text>
               </Card.Body>
-              <Card.Footer className="bg-white border-top-0">
+
+              <Card.Footer className="bg-white border-top-0 d-flex justify-content-between">
+                {/* Edit and delete buttons for each job */}
+                <Button
+                  variant="outline-primary"
+                  size="sm"
+                  onClick={() => handleEditClick(job)}
+                >
+                  Edit
+                </Button>
                 <Button
                   variant="danger"
                   size="sm"

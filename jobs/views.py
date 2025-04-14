@@ -1,35 +1,35 @@
-# Importing necessary DRF components and models
 from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated, SAFE_METHODS
 from rest_framework.exceptions import PermissionDenied
 from .models import Job, Application
 from .serializers import JobSerializer, ApplicationSerializer
-from rest_framework.permissions import BasePermission
 
-# Custom permission: only recruiters can POST, PUT, DELETE
-class IsRecruiterOrReadOnly(BasePermission):
+# Custom permission: only recruiters can POST/PUT/DELETE
+class IsRecruiterOrReadOnly(IsAuthenticated):
     def has_permission(self, request, view):
         if request.method in SAFE_METHODS:
-            return True  # Allow anyone to view jobs
+            return True
         return request.user.is_authenticated and request.user.user_type == 'recruiter'
 
-# ViewSet to handle all CRUD operations for Job objects
 class JobViewSet(viewsets.ModelViewSet):
     serializer_class = JobSerializer
     permission_classes = [IsRecruiterOrReadOnly]
 
+    # This dynamically controls what jobs are shown
     def get_queryset(self):
         user = self.request.user
-        # Allow everyone to view all jobs
+
+        # If it's a read-only request (GET), we check where it's coming from
         if self.request.method in SAFE_METHODS:
+            # 📍 Special case: if a recruiter is viewing from /manage, show only their jobs
+            if user.is_authenticated and user.user_type == 'recruiter' and self.request.path.startswith('/api/jobs'):
+                return Job.objects.filter(posted_by=user)
+
+            # For browsing publicly (like on /browse), return everything
             return Job.objects.all()
 
-        # If recruiter is modifying, only allow their own jobs
-        if user.is_authenticated and user.user_type == 'recruiter':
-            return Job.objects.filter(posted_by=user)
-
-        # All others get an empty queryset for write actions
-        return Job.objects.none()
+        # For writes (POST, PUT, DELETE) — only their own jobs
+        return Job.objects.filter(posted_by=user)
 
     def perform_create(self, serializer):
         user = self.request.user
@@ -37,6 +37,7 @@ class JobViewSet(viewsets.ModelViewSet):
             raise PermissionDenied("Only recruiters can post jobs.")
         serializer.save(posted_by=user)
 
+        
 # ViewSet to handle all CRUD operations for Applications
 class ApplicationViewSet(viewsets.ModelViewSet):
     queryset = Application.objects.all()  # Fetch all applications
