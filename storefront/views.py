@@ -1,32 +1,33 @@
-# Importing decorators and utilities for API views
+# Import decorators and response tools
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-# API view to handle both retrieving and updating the authenticated user's account info
+# GET and PUT account endpoint for authenticated users
 @api_view(['GET', 'PUT'])
-@permission_classes([IsAuthenticated])  # Only logged-in users can access this view
+@permission_classes([IsAuthenticated])
 def account_view(request):
-    user = request.user  # The currently authenticated user
+    user = request.user
 
-    # Handle GET request: return some basic user info
+    # Handle GET request: send account info
     if request.method == 'GET':
         return Response({
             "username": user.username,
-            "bio": getattr(user, 'bio', ''),  # Use getattr in case 'bio' doesn't exist
-            "user_type": user.user_type  # <- Add this line
+            "first_name": user.first_name,  # 👈 Include this for frontend use
+            "last_name": user.last_name,    # 👈 Include this too
+            "bio": getattr(user, 'bio', ''),
+            "user_type": user.user_type
         })
-    
-    # Handle PUT request: update user's bio and optionally PDF resume
+
+    # Handle PUT request: update user bio or resume
     elif request.method == 'PUT':
-        bio = request.data.get('bio', '')  # Get bio from request data (default to empty string)
+        bio = request.data.get('bio', '')
         if bio:
-            user.bio = bio  # Update user's bio
-        
-        # If a PDF file was uploaded, save it to the user's profile
-        # Make sure the CustomUser model has a 'pdf_file' field for this to work
+            user.bio = bio
+
+        # If a resume file is uploaded, attach it to the user model
         if 'pdf' in request.FILES:
             user.pdf_file = request.FILES['pdf']
-        
-        user.save()  # Save all changes to the database
+
+        user.save()
         return Response({"message": "Account updated successfully."})

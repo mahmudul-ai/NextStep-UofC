@@ -10,7 +10,7 @@ import Login from './components/Login';
 import ManageJobs from './components/ManageJobs';
 import HomePage from './components/HomePage'; 
 import Account from './components/Account';
-
+import JobApplicationForm from './components/JobApplicationForm';
 function App() {
   // Store authentication token (read from localStorage initially)
   // Used to determine if a user is logged in
@@ -34,6 +34,7 @@ function App() {
         <Route path="/browse" element={<BrowseJobs />} />
         <Route path="/manage" element={<ManageJobs />} />
         <Route path="/account" element={<Account />} />
+        <Route path="/jobs/:id/apply" element={<JobApplicationForm />} />
       </Routes>
     </Router>
   );
