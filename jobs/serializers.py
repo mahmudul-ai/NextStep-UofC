@@ -1,9 +1,10 @@
 # Importing DRF's serializer tools and the relevant models
 from rest_framework import serializers
 from .models import Job, Application
-
+posted_by = serializers.StringRelatedField()
 # Serializer for the Job model — used to convert Job instances to/from JSON
 class JobSerializer(serializers.ModelSerializer):
+    posted_by = serializers.StringRelatedField() 
     class Meta:
         model = Job
         fields = '__all__'  # Include all model fields in the serialized output
@@ -13,6 +14,7 @@ class JobSerializer(serializers.ModelSerializer):
 
 # Serializer for the Application model — handles data validation and transformation
 class ApplicationSerializer(serializers.ModelSerializer):
+    
     class Meta:
         model = Application
         fields = '__all__'  # Include all fields from the Application model

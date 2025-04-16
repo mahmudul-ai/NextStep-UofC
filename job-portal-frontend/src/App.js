@@ -11,6 +11,7 @@ import ManageJobs from './components/ManageJobs';
 import HomePage from './components/HomePage'; 
 import Account from './components/Account';
 import JobApplicationForm from './components/JobApplicationForm';
+import ViewApplications from './components/ViewApplications';
 function App() {
   // Store authentication token (read from localStorage initially)
   // Used to determine if a user is logged in
@@ -26,6 +27,7 @@ function App() {
 
       {/* Define all application routes */}
       <Routes>
+        <Route path="/applications" element={<ViewApplications />} />
         <Route path="/" element={<HomePage />} />
         <Route path="/jobs" element={<BrowseJobs />} />
         <Route path="/register" element={<Register />} />

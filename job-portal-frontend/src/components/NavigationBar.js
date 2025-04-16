@@ -34,6 +34,9 @@ function NavigationBar({ token, setToken }) {
                 {userRole === 'recruiter' && (
                   <Nav.Link as={NavLink} to="/manage">Manage Jobs</Nav.Link>
                 )}
+                {userRole === 'recruiter' && (
+                <Nav.Link as={NavLink} to="/applications">View Applications</Nav.Link>    
+                )}
 
                 {/* Show username info if available */}
                 {username && (

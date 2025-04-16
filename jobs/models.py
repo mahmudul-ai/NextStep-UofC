@@ -34,8 +34,13 @@ class Application(models.Model):
     )
     cover_letter = models.TextField(blank=True, null=True)  # Optional field for a cover letter
     applied_at = models.DateTimeField(auto_now_add=True)  # Timestamp of when the application was submitted
-    phone = models.CharField(max_length=20)
+    phone = models.CharField(max_length=20, blank= True)
     resume = models.FileField(upload_to='resumes/', blank=True, null=True)
+    status = models.CharField(max_length=20, choices=[
+        ('pending', 'Pending'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected')
+    ], default='pending')
 
     def __str__(self):
         # Helpful string representation for logs or admin: "username applied for Job Title"
