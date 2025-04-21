@@ -40,7 +40,7 @@ Run backend server:
     python manage.py runserver
 
 
-## Setting up Backend
+## Setting up Frontend
 
 Move to the frontend directory:
 
