@@ -1,6 +1,6 @@
 .venv/
 node_modules/
 .vscode/
-__pycache__/
+**/__pycache__/
 backend/.env
 backend/storefront/__pycache__/
