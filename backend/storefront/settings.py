@@ -29,6 +29,7 @@ INSTALLED_APPS = [
     # Your apps
     'accounts',
     'jobs',
+    'relay_data',
 ]
 
 MIDDLEWARE = [
