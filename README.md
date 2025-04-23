@@ -21,14 +21,13 @@ Activate vitual environment:
 
     .venv\Scripts\activate
 
-
-Install dependencies:
-
-    pip install -r requirements.txt
-
 Move to the backend directory:
 
     cd backend
+    
+Install dependencies:
+
+    pip install -r requirements.txt
 
 Set up and migrate data to the database:
 
