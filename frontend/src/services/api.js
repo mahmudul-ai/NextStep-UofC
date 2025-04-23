@@ -53,10 +53,14 @@ const apiService = {
         })
         .catch(error => {
           // If the error includes a specific message about duplicate keys
-          if (error.response?.data && 
+          if (
+            error.response?.data &&
+            (
               (typeof error.response.data === 'string' && error.response.data.includes('duplicate key')) ||
-              (error.response?.data?.message && error.response.data.message.includes('duplicate key'))) {
-            
+              (error.response?.data?.message && error.response.data.message.includes('duplicate key'))
+            )
+          ){
+          
             console.error('Employer registration error (duplicate key):', error);
             
             // Add more context to the error for better frontend handling
@@ -99,16 +103,16 @@ const apiService = {
 
   // Jobs
   getJobs: (filters = {}) => {
-    // Convert filters to URL query parameters
     const params = new URLSearchParams();
-    if (filters.keyword) params.append('JobTitle__icontains', filters.keyword);
-    if (filters.location) params.append('Location__icontains', filters.location);
-    if (filters.employerId) params.append('Employer', filters.employerId);
-    if (filters.minSalary) params.append('Salary__gte', filters.minSalary);
-    if (filters.maxSalary) params.append('Salary__lte', filters.maxSalary);
-    
+    if (filters.keyword) params.append('search', filters.keyword); // Matches DRF search_fields
+    if (filters.location) params.append('location', filters.location); // Matches your filterset
+    if (filters.employerId) params.append('employer', filters.employerId);
+    if (filters.minSalary) params.append('minSalary', filters.minSalary);
+    if (filters.maxSalary) params.append('maxSalary', filters.maxSalary);
+  
     return api.get(`/job-opening/${params.toString() ? `?${params.toString()}` : ''}`);
   },
+  
   
   getCompanyJobs: (employerId) => {
     // This is a convenience method that calls getJobs with the employer filter
