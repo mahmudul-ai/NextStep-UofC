@@ -18,8 +18,23 @@ function EmployerVerificationQueue() {
     const fetchVerificationData = async () => {
       try {
         setLoading(true);
-        const response = await api.getVerifications('employer', 'Pending');
-        setVerifications(response.data);
+        // Use the correct API endpoint for employer verifications
+        const response = await api.getEmployerVerificationQueue();
+        
+        // Map the response data to match the component's expected format
+        const formattedData = response.data.map(verification => ({
+          vid: verification.ID || verification.id,
+          employerId: verification.EmployerID || verification.employerId,
+          status: verification.VerificationStatus || verification.status,
+          date: verification.Date || verification.date,
+          employer: {
+            companyName: verification.employer?.CompanyName || verification.employer?.companyName,
+            industry: verification.employer?.Industry || verification.employer?.industry,
+            email: verification.employer?.Email || verification.employer?.email
+          }
+        }));
+        
+        setVerifications(formattedData);
         setLoading(false);
       } catch (err) {
         console.error("Error fetching verification data:", err);
@@ -44,8 +59,12 @@ function EmployerVerificationQueue() {
     try {
       setVerificationInProgress(true);
       
-      // Call API to update verification status
-      await api.verifyEntity('employer', selectedVerification.employerId, verificationStatus);
+      // Call API to update verification status using the correct endpoint
+      await api.verifyEmployer(
+        selectedVerification.employerId, 
+        verificationStatus,
+        verificationNotes
+      );
       
       // Update local state to reflect changes
       setVerifications(verifications.filter(v => v.vid !== selectedVerification.vid));

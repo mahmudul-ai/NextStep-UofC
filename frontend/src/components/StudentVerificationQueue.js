@@ -18,8 +18,24 @@ function StudentVerificationQueue() {
     const fetchVerificationData = async () => {
       try {
         setLoading(true);
-        const response = await api.getVerifications('student', 'Pending');
-        setVerifications(response.data);
+        // Use the correct API endpoint for student verifications
+        const response = await api.getStudentVerificationQueue();
+        
+        // Map the response data to match the component's expected format
+        const formattedData = response.data.map(verification => ({
+          vid: verification.ID || verification.id,
+          applicantUcid: verification.ApplicantID || verification.applicantId,
+          status: verification.VerificationStatus || verification.status,
+          date: verification.Date || verification.date,
+          student: {
+            name: `${verification.student?.FName || verification.student?.FirstName || ''} ${verification.student?.LName || verification.student?.LastName || ''}`.trim(),
+            email: verification.student?.Email || verification.student?.email,
+            major: verification.student?.Major || verification.student?.major,
+            graduationYear: verification.student?.GraduationYear || verification.student?.graduationYear
+          }
+        }));
+        
+        setVerifications(formattedData);
         setLoading(false);
       } catch (err) {
         console.error("Error fetching verification data:", err);
@@ -45,7 +61,11 @@ function StudentVerificationQueue() {
       setVerificationInProgress(true);
       
       // Call API to update verification status
-      await api.verifyEntity('student', selectedVerification.applicantUcid, verificationStatus);
+      await api.verifyStudent(
+        selectedVerification.applicantUcid, 
+        verificationStatus,
+        verificationNotes
+      );
       
       // Update local state to reflect changes
       setVerifications(verifications.filter(v => v.vid !== selectedVerification.vid));

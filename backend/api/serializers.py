@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from .models import *
+from django.utils import timezone
 
 from rest_framework import serializers
 from .models import *
@@ -52,7 +53,8 @@ class RegisterSerializer(serializers.ModelSerializer):
 
         # Create profile (but don't include in response)
         if user_type == 'student':
-            Student.objects.create(
+            # Create the Student record
+            student = Student.objects.create(
                 UCID=validated_data.pop('ucid', ''),
                 FName=user.first_name,
                 LName=user.last_name,
@@ -60,6 +62,21 @@ class RegisterSerializer(serializers.ModelSerializer):
                 Major=validated_data.pop('major', ''),
                 GraduationYear=validated_data.pop('graduation_year', None)
             )
+            
+            # Try to find an available moderator for student verification
+            try:
+                moderator = Moderator.objects.first()
+                if moderator:
+                    # Add the student to the verification queue
+                    VerifyApplicant.objects.create(
+                        ModeratorID=moderator,
+                        ApplicantUCID=student,
+                        VerificationStatus='Pending',
+                        VerificationDate=timezone.now().date()
+                    )
+            except Exception as e:
+                print(f"Error adding student to verification queue: {e}")
+                
         elif user_type == 'employer':
             Employer.objects.create(
                 CompanyName=validated_data.pop('company_name', ''),

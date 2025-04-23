@@ -47,30 +47,75 @@ function EmployerDashboard() {
       try {
         setLoading(true);
         
-        // For demo, just get employer from our mock data
-        const employerResponse = await api.getJobs(); // This is a workaround since we don't have a direct employer endpoint
-        const matchedEmployer = employerResponse.data[0]?.employerId === employerId ? 
-          { employerId, companyName: employerResponse.data[0].companyName } : 
-          { employerId, companyName: "Your Company" };
+        // Try to fetch employer data directly
+        let employerData = { employerId, companyName: "Your Company" };
         
-        setEmployer(matchedEmployer);
+        try {
+          const employerResponse = await api.getEmployer(employerId);
+          if (employerResponse.data) {
+            employerData = {
+              employerId: employerResponse.data.EmployerID || employerId,
+              companyName: employerResponse.data.CompanyName || "Your Company",
+              industry: employerResponse.data.Industry || "",
+              website: employerResponse.data.Website || "",
+              description: employerResponse.data.Description || ""
+            };
+          }
+        } catch (err) {
+          console.log("Could not fetch employer data directly, using fallback");
+        }
+        
+        setEmployer(employerData);
 
         // Fetch employer's job postings
-        const jobsResponse = await api.getJobs();
-        const filteredJobs = jobsResponse.data.filter(job => job.employerId === employerId);
-        setJobs(filteredJobs);
+        const jobsResponse = await api.getJobs({ employerId });
+        
+        // Map backend field names to frontend field names
+        const formattedJobs = jobsResponse.data.map(job => {
+          return {
+            jobId: job.JobID || job.jobId,
+            employerId: job.Employer || job.employerId,
+            jobTitle: job.JobTitle || job.jobTitle,
+            companyName: job.CompanyName || employerData.companyName,
+            location: job.Location || job.location,
+            salary: job.Salary || job.salary,
+            deadline: job.Deadline || job.deadline,
+            description: job.Description || job.description,
+            status: job.Status || job.status || "Active"
+          };
+        });
+        
+        setJobs(formattedJobs);
 
         // Fetch applications for employer's jobs
         const applicationsResponse = await api.getApplications({ employerId });
-        setApplications(applicationsResponse.data);
+        
+        // Map backend field names to frontend field names
+        const formattedApplications = applicationsResponse.data.map(app => {
+          return {
+            applicationId: app.ApplicationID || app.applicationId,
+            applicantUcid: app.ApplicantUCID || app.applicantUcid,
+            jobId: app.JobID || app.jobId,
+            status: app.Status || app.status,
+            dateApplied: app.DateApplied || app.dateApplied,
+            student: app.student || null,
+            job: app.job ? {
+              jobId: app.job.JobID || app.job.jobId,
+              jobTitle: app.job.JobTitle || app.job.jobTitle,
+              companyName: app.job.CompanyName || employerData.companyName
+            } : null
+          };
+        });
+        
+        setApplications(formattedApplications);
 
         // Fetch community score
         const communityScoreResponse = await api.getUserCommunityScore('employer', employerId);
-        setEmployer({
-          ...matchedEmployer,
+        setEmployer(prevState => ({
+          ...prevState,
           communityScore: communityScoreResponse.data.score,
           postCount: communityScoreResponse.data.postCount
-        });
+        }));
 
         setLoading(false);
       } catch (err) {
@@ -208,7 +253,7 @@ function EmployerDashboard() {
           )}
         </Col>
         <Col xs="auto">
-          <Button as={Link} to="/manage-jobs/new" variant="primary" className="me-2" disabled={!isVerified}>
+          <Button as={Link} to="/create-job" variant="primary" className="me-2" disabled={!isVerified}>
             Post New Job
           </Button>
           <Button as={Link} to="/forum" variant="outline-primary">
@@ -245,7 +290,7 @@ function EmployerDashboard() {
                 </Col>
                 <Col md={4} className="text-end">
                   <div className="d-grid">
-                    <Button as={Link} to="/manage-jobs/new" variant="primary" className="mb-2" disabled={!isVerified}>
+                    <Button as={Link} to="/create-job" variant="primary" className="mb-2" disabled={!isVerified}>
                       Post New Job
                       {!isVerified && <span className="ms-2">(Verification Required)</span>}
                     </Button>
@@ -506,45 +551,6 @@ function EmployerDashboard() {
                 Create New Post
               </Button>
             </Card.Footer>
-          </Card>
-        </Col>
-      </Row>
-      
-      {/* Quick Actions */}
-      <Row>
-        <Col>
-          <Card>
-            <Card.Header>
-              <h5 className="mb-0">Quick Actions</h5>
-            </Card.Header>
-            <Card.Body>
-              <Row>
-                <Col md={3} className="mb-3 mb-md-0">
-                  <Button as={Link} to="/manage-jobs/new" variant="outline-primary" className="w-100">
-                    <i className="bi bi-plus-circle me-2"></i>
-                    Post New Job
-                  </Button>
-                </Col>
-                <Col md={3} className="mb-3 mb-md-0">
-                  <Button as={Link} to="/manage-jobs" variant="outline-primary" className="w-100">
-                    <i className="bi bi-briefcase me-2"></i>
-                    Manage Jobs
-                  </Button>
-                </Col>
-                <Col md={3} className="mb-3 mb-md-0">
-                  <Button as={Link} to="/applications" variant="outline-primary" className="w-100">
-                    <i className="bi bi-file-earmark-person me-2"></i>
-                    View Applications
-                  </Button>
-                </Col>
-                <Col md={3}>
-                  <Button as={Link} to="/forum" variant="outline-primary" className="w-100">
-                    <i className="bi bi-chat-text me-2"></i>
-                    Community Forum
-                  </Button>
-                </Col>
-              </Row>
-            </Card.Body>
           </Card>
         </Col>
       </Row>

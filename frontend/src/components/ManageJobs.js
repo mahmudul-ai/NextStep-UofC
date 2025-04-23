@@ -62,15 +62,49 @@ function ManageJobs({ isNew }) {
     const fetchEmployerJobs = async () => {
       try {
         setLoading(true);
-        // Get company jobs
+        
+        console.log('Fetching jobs for employer:', employerId);
+        
+        // Get company jobs - don't filter by status to get ALL jobs
         const response = await api.getCompanyJobs(employerId);
         
         if (response && response.data) {
-          setJobs(response.data);
+          console.log('Fetched jobs:', response.data);
+          
+          // Ensure consistent job status field and format
+          const formattedJobs = response.data.map(job => {
+            const formattedJob = {
+              jobId: job.JobID || job.jobId,
+              employerId: job.Employer || job.employerId,
+              jobTitle: job.JobTitle || job.jobTitle,
+              description: job.Description || job.description,
+              location: job.Location || job.location,
+              salary: job.Salary || job.salary,
+              deadline: job.Deadline || job.deadline,
+              requirements: job.Requirements || job.requirements,
+              responsibilities: job.Responsibilities || job.responsibilities,
+              benefits: job.Benefits || job.benefits,
+              feedback: job.feedback || job.Feedback || '',
+              status: job.Status || job.status || 'Pending'
+            };
+            
+            // Check if deadline has passed and it's still active
+            if (formattedJob.status === 'Active' && 
+                formattedJob.deadline && 
+                new Date(formattedJob.deadline) < new Date()) {
+              console.log(`Job ${formattedJob.jobId} deadline has passed, marking as Closed`);
+              formattedJob.status = 'Closed';
+            }
+            
+            return formattedJob;
+          });
+          
+          console.log('Formatted jobs:', formattedJobs);
+          setJobs(formattedJobs);
           
           // If a job ID is specified in the URL, load that job for editing
           if (id) {
-            const jobToEdit = response.data.find(job => job.jobId === parseInt(id));
+            const jobToEdit = formattedJobs.find(job => job.jobId === parseInt(id));
             if (jobToEdit) {
               setSelectedJob(jobToEdit);
               setJobFormData({
@@ -92,6 +126,9 @@ function ManageJobs({ isNew }) {
             setEditMode(true);
             setSelectedJob(null);
           }
+        } else {
+          console.log('No jobs found or invalid response format');
+          setJobs([]);
         }
         
         setLoading(false);
@@ -245,7 +282,7 @@ function ManageJobs({ isNew }) {
     return diffDays;
   };
   
-  // Determine if a job is closed (deadline passed)
+  // Check if job is closed
   const isJobClosed = (job) => {
     if (job.status === 'Closed') return true;
     if (!job.deadline) return false;
@@ -254,9 +291,29 @@ function ManageJobs({ isNew }) {
   
   // Filter jobs by status
   const pendingJobs = jobs.filter(job => job.status === 'Pending');
-  const activeJobs = jobs.filter(job => job.status === 'Active' && !isJobClosed(job));
-  const closedJobs = jobs.filter(job => job.status === 'Closed' || (job.status === 'Active' && isJobClosed(job)));
+  
+  // Active jobs are those with "Active" status and not past deadline
+  const activeJobs = jobs.filter(job => {
+    if (job.status !== 'Active') return false;
+    return !isJobClosed(job);
+  });
+  
+  // Closed jobs are those with "Closed" status OR "Active" but past deadline
+  const closedJobs = jobs.filter(job => {
+    if (job.status === 'Closed') return true;
+    if (job.status === 'Active' && isJobClosed(job)) return true;
+    return false;
+  });
+  
   const rejectedJobs = jobs.filter(job => job.status === 'Rejected');
+  
+  console.log('Job status counts:', {
+    pending: pendingJobs.length,
+    active: activeJobs.length,
+    closed: closedJobs.length,
+    rejected: rejectedJobs.length,
+    total: jobs.length
+  });
   
   // Check if employer is verified
   const isVerified = verificationStatus === 'Verified';
@@ -447,7 +504,7 @@ function ManageJobs({ isNew }) {
     <Container className="py-4">
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h2>Manage Job Postings</h2>
-        <Button as={Link} to="/manage-jobs/new" variant="primary">
+        <Button as={Link} to="/create-job" variant="primary">
           Post New Job
         </Button>
       </div>
@@ -455,179 +512,281 @@ function ManageJobs({ isNew }) {
       {error && <Alert variant="danger">{error}</Alert>}
       {message && <Alert variant="success">{message}</Alert>}
       
-      <Tabs defaultActiveKey="active" className="mb-4">
-        {pendingJobs.length > 0 && (
-          <Tab eventKey="pending" title={`Pending Jobs (${pendingJobs.length})`}>
-            <ListGroup>
-              {pendingJobs.map(job => (
-                <ListGroup.Item key={job.jobId} className="border mb-3">
-                  <div className="d-flex justify-content-between align-items-start">
-                    <div>
-                      <h5>{job.jobTitle}</h5>
-                      <div className="d-flex gap-2 mb-2">
-                        <Badge bg='warning'>
-                          Awaiting Approval
-                        </Badge>
-                        <Badge bg="secondary">{job.location}</Badge>
-                        <Badge bg="secondary">{formatSalary(job.salary)}</Badge>
+      {jobs.length > 0 && (
+        <Row className="mb-4">
+          <Col>
+            <Card className="border-0 shadow-sm">
+              <Card.Body>
+                <h5 className="mb-3">Job Status Overview</h5>
+                <Row>
+                  <Col xs={6} md={3} className="mb-3 mb-md-0">
+                    <div className="d-flex align-items-center">
+                      <div className="bg-success me-3" style={{ width: '10px', height: '40px', borderRadius: '3px' }}></div>
+                      <div>
+                        <div className="h3 mb-0">{activeJobs.length}</div>
+                        <div className="text-muted">Active</div>
                       </div>
                     </div>
-                    <div>
-                      <Button 
-                        as={Link} 
-                        to={`/manage-jobs/${job.jobId}`} 
-                        variant="outline-primary" 
-                        size="sm" 
-                        className="me-2"
-                      >
-                        Edit
-                      </Button>
-                      <Button 
-                        variant="outline-danger" 
-                        size="sm" 
-                        onClick={() => handleDeleteJob(job.jobId)}
-                      >
-                        Delete
-                      </Button>
+                  </Col>
+                  <Col xs={6} md={3} className="mb-3 mb-md-0">
+                    <div className="d-flex align-items-center">
+                      <div className="bg-warning me-3" style={{ width: '10px', height: '40px', borderRadius: '3px' }}></div>
+                      <div>
+                        <div className="h3 mb-0">{pendingJobs.length}</div>
+                        <div className="text-muted">Pending</div>
+                      </div>
                     </div>
-                  </div>
-                </ListGroup.Item>
-              ))}
-            </ListGroup>
+                  </Col>
+                  <Col xs={6} md={3}>
+                    <div className="d-flex align-items-center">
+                      <div className="bg-secondary me-3" style={{ width: '10px', height: '40px', borderRadius: '3px' }}></div>
+                      <div>
+                        <div className="h3 mb-0">{closedJobs.length}</div>
+                        <div className="text-muted">Closed</div>
+                      </div>
+                    </div>
+                  </Col>
+                  <Col xs={6} md={3}>
+                    <div className="d-flex align-items-center">
+                      <div className="bg-danger me-3" style={{ width: '10px', height: '40px', borderRadius: '3px' }}></div>
+                      <div>
+                        <div className="h3 mb-0">{rejectedJobs.length}</div>
+                        <div className="text-muted">Rejected</div>
+                      </div>
+                    </div>
+                  </Col>
+                </Row>
+              </Card.Body>
+            </Card>
+          </Col>
+        </Row>
+      )}
+      
+      {jobs.length === 0 && !error && (
+        <Alert variant="info" className="text-center">
+          <h5>No Job Postings Yet</h5>
+          <p>Create your first job posting to start recruiting.</p>
+          <Button as={Link} to="/create-job" variant="primary">
+            Create Job Posting
+          </Button>
+        </Alert>
+      )}
+      
+      {jobs.length > 0 && (
+        <Tabs defaultActiveKey="active" className="mb-4 nav-fill">
+          <Tab eventKey="active" title={
+            <div className="d-flex align-items-center">
+              <span className="badge bg-success me-2">{activeJobs.length}</span>
+              <span>Active</span>
+            </div>
+          }>
+            <Card className="border-0 shadow-sm">
+              <Card.Body>
+                <ListGroup>
+                  {activeJobs.length === 0 ? (
+                    <Alert variant="info">You don't have any active job postings.</Alert>
+                  ) : (
+                    activeJobs.map(job => (
+                      <ListGroup.Item key={job.jobId} className="border mb-3">
+                        <div className="d-flex justify-content-between align-items-start">
+                          <div>
+                            <h5>{job.jobTitle}</h5>
+                            <div className="d-flex gap-2 mb-2">
+                              <Badge bg="success">Active</Badge>
+                              <Badge bg="secondary">{job.location}</Badge>
+                              <Badge bg="secondary">{formatSalary(job.salary)}</Badge>
+                            </div>
+                            <small>
+                              Deadline: {formatDate(job.deadline)} 
+                              ({calculateDaysRemaining(job.deadline)} days remaining)
+                            </small>
+                          </div>
+                          <div>
+                            <Button 
+                              as={Link} 
+                              to={`/manage-jobs/${job.jobId}`} 
+                              variant="outline-primary" 
+                              size="sm" 
+                              className="me-2"
+                            >
+                              Edit
+                            </Button>
+                            <Button 
+                              variant="outline-danger" 
+                              size="sm" 
+                              onClick={() => handleDeleteJob(job.jobId)}
+                            >
+                              Delete
+                            </Button>
+                          </div>
+                        </div>
+                      </ListGroup.Item>
+                    ))
+                  )}
+                </ListGroup>
+              </Card.Body>
+            </Card>
           </Tab>
-        )}
-        
-        <Tab eventKey="active" title={`Active Jobs (${activeJobs.length})`}>
-          <ListGroup>
-            {activeJobs.length === 0 ? (
-              <Alert variant="info">You don't have any active job postings.</Alert>
-            ) : (
-              activeJobs.map(job => (
-                <ListGroup.Item key={job.jobId} className="border mb-3">
-                  <div className="d-flex justify-content-between align-items-start">
-                    <div>
-                      <h5>{job.jobTitle}</h5>
-                      <div className="d-flex gap-2 mb-2">
-                        <Badge bg="success">Active</Badge>
-                        <Badge bg="secondary">{job.location}</Badge>
-                        <Badge bg="secondary">{formatSalary(job.salary)}</Badge>
-                      </div>
-                      <small>
-                        Deadline: {formatDate(job.deadline)} 
-                        ({calculateDaysRemaining(job.deadline)} days remaining)
-                      </small>
-                    </div>
-                    <div>
-                      <Button 
-                        as={Link} 
-                        to={`/manage-jobs/${job.jobId}`} 
-                        variant="outline-primary" 
-                        size="sm" 
-                        className="me-2"
-                      >
-                        Edit
-                      </Button>
-                      <Button 
-                        variant="outline-danger" 
-                        size="sm" 
-                        onClick={() => handleDeleteJob(job.jobId)}
-                      >
-                        Delete
-                      </Button>
-                    </div>
-                  </div>
-                </ListGroup.Item>
-              ))
-            )}
-          </ListGroup>
-        </Tab>
-        
-        <Tab eventKey="closed" title={`Closed Jobs (${closedJobs.length})`}>
-          <ListGroup>
-            {closedJobs.length === 0 ? (
-              <Alert variant="info">You don't have any closed job postings.</Alert>
-            ) : (
-              closedJobs.map(job => (
-                <ListGroup.Item key={job.jobId} className="border mb-3">
-                  <div className="d-flex justify-content-between align-items-start">
-                    <div>
-                      <h5>{job.jobTitle}</h5>
-                      <div className="d-flex gap-2 mb-2">
-                        <Badge bg="secondary">Closed</Badge>
-                        <Badge bg="secondary">{job.location}</Badge>
-                        <Badge bg="secondary">{formatSalary(job.salary)}</Badge>
-                      </div>
-                      <small>
-                        Deadline: {formatDate(job.deadline)} 
-                        {calculateDaysRemaining(job.deadline) <= 0 && " (Expired)"}
-                      </small>
-                    </div>
-                    <div>
-                      <Button 
-                        variant="outline-danger" 
-                        size="sm" 
-                        onClick={() => handleDeleteJob(job.jobId)}
-                      >
-                        Delete
-                      </Button>
-                    </div>
-                  </div>
-                </ListGroup.Item>
-              ))
-            )}
-          </ListGroup>
-        </Tab>
-        
-        {rejectedJobs.length > 0 && (
-          <Tab eventKey="rejected" title={`Rejected Jobs (${rejectedJobs.length})`}>
-            <ListGroup>
-              {rejectedJobs.map(job => (
-                <ListGroup.Item key={job.jobId} className="border mb-3">
-                  <div className="d-flex justify-content-between align-items-start">
-                    <div>
-                      <h5>{job.jobTitle}</h5>
-                      <div className="d-flex gap-2 mb-2">
-                        <Badge bg="danger">Rejected</Badge>
-                        <Badge bg="secondary">{job.location}</Badge>
-                        <Badge bg="secondary">{formatSalary(job.salary)}</Badge>
-                      </div>
-                      {job.feedback && (
-                        <Alert variant="danger" className="mt-2 mb-2">
-                          <strong>Moderator Feedback:</strong> {job.feedback}
-                        </Alert>
-                      )}
-                      <div className="mt-2">
-                        <p className="text-muted small">
-                          <i className="bi bi-info-circle me-1"></i>
-                          Edit this job posting according to the moderator's feedback and resubmit for approval.
-                        </p>
-                      </div>
-                    </div>
-                    <div>
-                      <Button 
-                        as={Link} 
-                        to={`/manage-jobs/${job.jobId}`} 
-                        variant="outline-primary" 
-                        size="sm" 
-                        className="me-2"
-                      >
-                        Edit & Resubmit
-                      </Button>
-                      <Button 
-                        variant="outline-danger" 
-                        size="sm" 
-                        onClick={() => handleDeleteJob(job.jobId)}
-                      >
-                        Delete
-                      </Button>
-                    </div>
-                  </div>
-                </ListGroup.Item>
-              ))}
-            </ListGroup>
+          
+          <Tab eventKey="pending" title={
+            <div className="d-flex align-items-center">
+              <span className="badge bg-warning me-2">{pendingJobs.length}</span>
+              <span>Pending</span>
+            </div>
+          }>
+            <Card className="border-0 shadow-sm">
+              <Card.Body>
+                <ListGroup>
+                  {pendingJobs.length === 0 ? (
+                    <Alert variant="info">You don't have any pending job postings.</Alert>
+                  ) : (
+                    pendingJobs.map(job => (
+                      <ListGroup.Item key={job.jobId} className="border mb-3">
+                        <div className="d-flex justify-content-between align-items-start">
+                          <div>
+                            <h5>{job.jobTitle}</h5>
+                            <div className="d-flex gap-2 mb-2">
+                              <Badge bg='warning'>
+                                Awaiting Approval
+                              </Badge>
+                              <Badge bg="secondary">{job.location}</Badge>
+                              <Badge bg="secondary">{formatSalary(job.salary)}</Badge>
+                            </div>
+                          </div>
+                          <div>
+                            <Button 
+                              as={Link} 
+                              to={`/manage-jobs/${job.jobId}`} 
+                              variant="outline-primary" 
+                              size="sm" 
+                              className="me-2"
+                            >
+                              Edit
+                            </Button>
+                            <Button 
+                              variant="outline-danger" 
+                              size="sm" 
+                              onClick={() => handleDeleteJob(job.jobId)}
+                            >
+                              Delete
+                            </Button>
+                          </div>
+                        </div>
+                      </ListGroup.Item>
+                    ))
+                  )}
+                </ListGroup>
+              </Card.Body>
+            </Card>
           </Tab>
-        )}
-      </Tabs>
+          
+          <Tab eventKey="closed" title={
+            <div className="d-flex align-items-center">
+              <span className="badge bg-secondary me-2">{closedJobs.length}</span>
+              <span>Closed</span>
+            </div>
+          }>
+            <Card className="border-0 shadow-sm">
+              <Card.Body>
+                <ListGroup>
+                  {closedJobs.length === 0 ? (
+                    <Alert variant="info">You don't have any closed job postings.</Alert>
+                  ) : (
+                    closedJobs.map(job => (
+                      <ListGroup.Item key={job.jobId} className="border mb-3">
+                        <div className="d-flex justify-content-between align-items-start">
+                          <div>
+                            <h5>{job.jobTitle}</h5>
+                            <div className="d-flex gap-2 mb-2">
+                              <Badge bg="secondary">Closed</Badge>
+                              <Badge bg="secondary">{job.location}</Badge>
+                              <Badge bg="secondary">{formatSalary(job.salary)}</Badge>
+                            </div>
+                            <small>
+                              Deadline: {formatDate(job.deadline)} 
+                              {calculateDaysRemaining(job.deadline) <= 0 && " (Expired)"}
+                            </small>
+                          </div>
+                          <div>
+                            <Button 
+                              variant="outline-danger" 
+                              size="sm" 
+                              onClick={() => handleDeleteJob(job.jobId)}
+                            >
+                              Delete
+                            </Button>
+                          </div>
+                        </div>
+                      </ListGroup.Item>
+                    ))
+                  )}
+                </ListGroup>
+              </Card.Body>
+            </Card>
+          </Tab>
+          
+          <Tab eventKey="rejected" title={
+            <div className="d-flex align-items-center">
+              <span className="badge bg-danger me-2">{rejectedJobs.length}</span>
+              <span>Rejected</span>
+            </div>
+          }>
+            <Card className="border-0 shadow-sm">
+              <Card.Body>
+                <ListGroup>
+                  {rejectedJobs.length === 0 ? (
+                    <Alert variant="info">You don't have any rejected job postings.</Alert>
+                  ) : (
+                    rejectedJobs.map(job => (
+                      <ListGroup.Item key={job.jobId} className="border mb-3">
+                        <div className="d-flex justify-content-between align-items-start">
+                          <div>
+                            <h5>{job.jobTitle}</h5>
+                            <div className="d-flex gap-2 mb-2">
+                              <Badge bg="danger">Rejected</Badge>
+                              <Badge bg="secondary">{job.location}</Badge>
+                              <Badge bg="secondary">{formatSalary(job.salary)}</Badge>
+                            </div>
+                            {job.feedback && (
+                              <Alert variant="danger" className="mt-2 mb-2">
+                                <strong>Moderator Feedback:</strong> {job.feedback}
+                              </Alert>
+                            )}
+                            <div className="mt-2">
+                              <p className="text-muted small">
+                                <i className="bi bi-info-circle me-1"></i>
+                                Edit this job posting according to the moderator's feedback and resubmit for approval.
+                              </p>
+                            </div>
+                          </div>
+                          <div>
+                            <Button 
+                              as={Link} 
+                              to={`/manage-jobs/${job.jobId}`} 
+                              variant="outline-primary" 
+                              size="sm" 
+                              className="me-2"
+                            >
+                              Edit & Resubmit
+                            </Button>
+                            <Button 
+                              variant="outline-danger" 
+                              size="sm" 
+                              onClick={() => handleDeleteJob(job.jobId)}
+                            >
+                              Delete
+                            </Button>
+                          </div>
+                        </div>
+                      </ListGroup.Item>
+                    ))
+                  )}
+                </ListGroup>
+              </Card.Body>
+            </Card>
+          </Tab>
+        </Tabs>
+      )}
     </Container>
   );
 }

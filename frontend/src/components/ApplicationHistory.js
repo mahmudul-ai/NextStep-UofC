@@ -30,10 +30,111 @@ function ApplicationHistory() {
       try {
         setLoading(true);
         const response = await api.getStudentApplications(ucid);
+        console.log('Raw applications data:', response.data);
+        
+        // Filter applications to ensure they belong to the current user
+        const userApplications = response.data.filter(app => {
+          const appUcid = app.ApplicantUCID || app.applicantUcid;
+          return appUcid && (appUcid.toString() === ucid.toString() || parseInt(appUcid) === parseInt(ucid));
+        });
+        
+        console.log('Filtered applications for current user:', userApplications);
+        
+        // For each application, fetch the associated job details if not already included
+        const applicationsWithJobDetails = await Promise.all(
+          userApplications.map(async (app) => {
+            // If job details are already included, use them
+            if (app.job) {
+              return {
+                applicationId: app.ApplicationID || app.applicationId || app.id,
+                jobId: app.JobID || app.jobId,
+                employerId: app.EmployerID || app.employerId,
+                status: app.Status || app.status,
+                dateApplied: app.DateApplied || app.dateApplied,
+                feedback: app.Feedback || app.feedback || '',
+                job: {
+                  jobId: app.job.JobID || app.job.jobId,
+                  jobTitle: app.job.JobTitle || app.job.jobTitle,
+                  companyName: app.job.CompanyName || app.job.companyName,
+                  location: app.job.Location || app.job.location,
+                  salary: app.job.Salary || app.job.salary,
+                  deadline: app.job.Deadline || app.job.deadline,
+                  description: app.job.Description || app.job.description
+                }
+              };
+            }
+            
+            // Otherwise, fetch the job details
+            try {
+              const jobId = app.JobID || app.jobId;
+              if (!jobId) {
+                console.warn('Application missing job ID:', app);
+                return {
+                  applicationId: app.ApplicationID || app.applicationId || app.id,
+                  jobId: null,
+                  employerId: app.EmployerID || app.employerId,
+                  status: app.Status || app.status,
+                  dateApplied: app.DateApplied || app.dateApplied,
+                  feedback: app.Feedback || app.feedback || '',
+                  job: null
+                };
+              }
+              
+              const jobResponse = await api.getJob(jobId);
+              const jobData = jobResponse.data;
+              
+              // If company name is missing but we have employerId, fetch the employer details
+              let companyName = jobData.CompanyName || jobData.companyName;
+              if (!companyName && (jobData.Employer || jobData.employerId)) {
+                try {
+                  const employerId = jobData.Employer || jobData.employerId;
+                  const employerResponse = await api.getEmployer(employerId);
+                  companyName = employerResponse.data.CompanyName || employerResponse.data.companyName;
+                  console.log(`Found company name '${companyName}' for job ${jobId} from employer ${employerId}`);
+                } catch (employerError) {
+                  console.error(`Error fetching employer details for job ${jobId}:`, employerError);
+                }
+              }
+              
+              return {
+                applicationId: app.ApplicationID || app.applicationId || app.id,
+                jobId: jobId,
+                employerId: app.EmployerID || app.employerId,
+                status: app.Status || app.status,
+                dateApplied: app.DateApplied || app.dateApplied,
+                feedback: app.Feedback || app.feedback || '',
+                job: {
+                  jobId: jobData.JobID || jobData.jobId,
+                  jobTitle: jobData.JobTitle || jobData.jobTitle,
+                  companyName: companyName || 'Company Name Not Available',
+                  location: jobData.Location || jobData.location,
+                  salary: jobData.Salary || jobData.salary,
+                  deadline: jobData.Deadline || jobData.deadline,
+                  description: jobData.Description || jobData.description
+                }
+              };
+            } catch (error) {
+              console.error(`Error fetching job details for application ${app.ApplicationID || app.applicationId}:`, error);
+              return {
+                applicationId: app.ApplicationID || app.applicationId || app.id,
+                jobId: app.JobID || app.jobId,
+                employerId: app.EmployerID || app.employerId,
+                status: app.Status || app.status,
+                dateApplied: app.DateApplied || app.dateApplied,
+                feedback: app.Feedback || app.feedback || '',
+                job: null
+              };
+            }
+          })
+        );
+        
+        console.log('Applications with job details:', applicationsWithJobDetails);
+        
         // Sort applications by date applied (newest first)
-        const sortedApplications = response.data.sort((a, b) => 
+        const sortedApplications = applicationsWithJobDetails.sort((a, b) => 
           new Date(b.dateApplied) - new Date(a.dateApplied)
         );
+        
         setApplications(sortedApplications);
         setLoading(false);
       } catch (err) {
@@ -48,8 +149,22 @@ function ApplicationHistory() {
     }
   }, [ucid]);
   
+  // Format date display
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    try {
+      const options = { year: 'numeric', month: 'short', day: 'numeric' };
+      return new Date(dateString).toLocaleDateString('en-US', options);
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return 'Invalid Date';
+    }
+  };
+  
   // Get status badge variant
   const getStatusBadgeVariant = (status) => {
+    if (!status) return 'secondary';
+    
     switch (status.toLowerCase()) {
       case 'pending':
         return 'warning';
@@ -73,6 +188,8 @@ function ApplicationHistory() {
   
   // Format status for display
   const formatStatus = (status) => {
+    if (!status) return 'Unknown';
+    
     switch (status.toLowerCase()) {
       case 'pending':
         return 'Pending Review';
@@ -96,11 +213,11 @@ function ApplicationHistory() {
   
   // Filter applications by status
   const activeApplications = applications.filter(app => 
-    !['rejected', 'accepted'].includes(app.status.toLowerCase())
+    app.status && !['rejected', 'accepted'].includes(app.status.toLowerCase())
   );
   
   const completedApplications = applications.filter(app => 
-    ['rejected', 'accepted'].includes(app.status.toLowerCase())
+    app.status && ['rejected', 'accepted'].includes(app.status.toLowerCase())
   );
   
   if (loading) {
@@ -158,13 +275,13 @@ function ApplicationHistory() {
                     <ListGroup.Item key={application.applicationId}>
                       <Row>
                         <Col md={8}>
-                          <h5 className="mb-1">{application.job.jobTitle}</h5>
-                          <p className="mb-1 text-muted">{application.job.companyName} • {application.job.location}</p>
+                          <h5 className="mb-1">{application.job?.jobTitle || 'Unnamed Job'}</h5>
+                          <p className="mb-1 text-muted">{application.job?.companyName || 'Unknown Company'} • {application.job?.location || 'No location specified'}</p>
                           <div>
                             <Badge bg={getStatusBadgeVariant(application.status)} className="me-2">
                               {formatStatus(application.status)}
                             </Badge>
-                            <small className="text-muted">Applied on: {new Date(application.dateApplied).toLocaleDateString()}</small>
+                            <small className="text-muted">Applied on: {formatDate(application.dateApplied)}</small>
                           </div>
                         </Col>
                         <Col md={4} className="d-flex justify-content-end align-items-center">
@@ -195,13 +312,13 @@ function ApplicationHistory() {
                     <ListGroup.Item key={application.applicationId}>
                       <Row>
                         <Col md={8}>
-                          <h5 className="mb-1">{application.job.jobTitle}</h5>
-                          <p className="mb-1 text-muted">{application.job.companyName} • {application.job.location}</p>
+                          <h5 className="mb-1">{application.job?.jobTitle || 'Unnamed Job'}</h5>
+                          <p className="mb-1 text-muted">{application.job?.companyName || 'Unknown Company'} • {application.job?.location || 'No location specified'}</p>
                           <div>
                             <Badge bg={getStatusBadgeVariant(application.status)} className="me-2">
                               {formatStatus(application.status)}
                             </Badge>
-                            <small className="text-muted">Applied on: {new Date(application.dateApplied).toLocaleDateString()}</small>
+                            <small className="text-muted">Applied on: {formatDate(application.dateApplied)}</small>
                             {application.feedback && (
                               <p className="mt-2 mb-0">
                                 <strong>Feedback:</strong> {application.feedback}
@@ -237,13 +354,13 @@ function ApplicationHistory() {
                     <ListGroup.Item key={application.applicationId}>
                       <Row>
                         <Col md={8}>
-                          <h5 className="mb-1">{application.job.jobTitle}</h5>
-                          <p className="mb-1 text-muted">{application.job.companyName} • {application.job.location}</p>
+                          <h5 className="mb-1">{application.job?.jobTitle || 'Unnamed Job'}</h5>
+                          <p className="mb-1 text-muted">{application.job?.companyName || 'Unknown Company'} • {application.job?.location || 'No location specified'}</p>
                           <div>
                             <Badge bg={getStatusBadgeVariant(application.status)} className="me-2">
                               {formatStatus(application.status)}
                             </Badge>
-                            <small className="text-muted">Applied on: {new Date(application.dateApplied).toLocaleDateString()}</small>
+                            <small className="text-muted">Applied on: {formatDate(application.dateApplied)}</small>
                             {application.feedback && (
                               <p className="mt-2 mb-0">
                                 <strong>Feedback:</strong> {application.feedback}

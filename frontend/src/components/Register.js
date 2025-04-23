@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Container, Row, Col, Card, Form, Button, Alert } from 'react-bootstrap';
-import { useNavigate } from 'react-router-dom';
+import { Container, Row, Col, Card, Form, Button, Alert, Spinner } from 'react-bootstrap';
+import { useNavigate, Link } from 'react-router-dom';
 import api from '../services/api';
 
 function Register() {
@@ -22,20 +22,46 @@ function Register() {
   });
 
   const [error, setError] = useState('');
+  const [warning, setWarning] = useState('');
   const [success, setSuccess] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showSwitchOption, setShowSwitchOption] = useState(false);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    
+    // Clear warnings when user type changes
+    if (name === 'user_type') {
+      setWarning('');
+      setShowSwitchOption(false);
+      
+      // Show warning for employer registration
+      if (value === 'employer') {
+        setWarning('Note: Employer registration may be limited at this time. If you encounter issues, please try registering as a student first and contact support to upgrade your account.');
+      }
+    }
+    
     setFormData(prev => ({
       ...prev,
       [name]: value
     }));
   };
 
+  const handleSwitchToStudent = () => {
+    setFormData(prev => ({
+      ...prev,
+      user_type: 'student'
+    }));
+    setError('');
+    setWarning('Please complete the student registration form. You can request an employer account upgrade later.');
+    setShowSwitchOption(false);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setWarning('');
+    setShowSwitchOption(false);
     setIsSubmitting(true);
 
     // Basic validation
@@ -43,6 +69,23 @@ function Register() {
       setError("Passwords don't match");
       setIsSubmitting(false);
       return;
+    }
+
+    // For employer registrations, make a test API call first to check if it's likely to fail
+    if (formData.user_type === 'employer') {
+      try {
+        const testResponse = await api.getEmployers();
+        const employers = testResponse.data;
+        
+        // If there are already employers with IDs 1, 2, 3, we might have issues with auto-increment
+        const existingIds = employers.map(emp => emp.EmployerID);
+        if (existingIds.includes(1) && existingIds.includes(2) && existingIds.includes(3)) {
+          setWarning('Our system is experiencing high demand for employer registrations. You may need to try again later or contact support.');
+        }
+      } catch (err) {
+        console.log('Could not check existing employers', err);
+        // Continue with registration attempt even if this check fails
+      }
     }
 
     try {
@@ -59,7 +102,7 @@ function Register() {
       if (formData.user_type === 'student') {
         payload.ucid = formData.ucid;
         payload.major = formData.major;
-        payload.graduation_year = formData.graduation_year;
+        payload.graduation_year = parseInt(formData.graduation_year) || null;
       }
       // Add employer-specific fields
       else if (formData.user_type === 'employer') {
@@ -69,12 +112,10 @@ function Register() {
         payload.description = formData.description;
       }
 
-      const response = await api.post('/register/', payload);
-      console.log(response);
+      const response = await api.register(payload);
       
       if (response.data.status === 'success') {
         // Registration successful
-        
         setSuccess(true);
         setTimeout(() => {
           navigate('/login');
@@ -82,7 +123,32 @@ function Register() {
       }
     } catch (err) {
       // Handle network or server errors
-      setError(err.response?.data?.error || 'Registration failed. Please try again.');
+      console.error('Registration error:', err);
+      
+      // Check for specific database constraint error
+      const errorResponse = err.response?.data?.message || err.response?.data?.error || err.response?.data || '';
+      const errorString = typeof errorResponse === 'string' ? errorResponse : JSON.stringify(errorResponse);
+      
+      // Extract specific error message if available
+      let errorMessage = 'Registration failed. Please try again.';
+      
+      if (errorString.includes('duplicate key') && errorString.includes('employer_pkey')) {
+        errorMessage = 'We are currently experiencing technical issues with employer registration. Please try again later or contact support. Alternatively, you can register as a student and request an account upgrade later.';
+        
+        // Show option to switch to student registration
+        setWarning('Would you like to register as a student instead? You can request an account upgrade later.');
+        setShowSwitchOption(true);
+      } else if (errorString.includes('duplicate key')) {
+        errorMessage = 'An account with this information already exists. Please use different credentials.';
+      } else if (err.response?.data?.message) {
+        errorMessage = err.response.data.message;
+      } else if (err.response?.data?.error) {
+        errorMessage = err.response.data.error;
+      } else if (typeof err.response?.data === 'string') {
+        errorMessage = err.response.data;
+      }
+      
+      setError(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -97,6 +163,17 @@ function Register() {
               <h3 className="mb-4 text-center">Register</h3>
               
               {error && <Alert variant="danger">{error}</Alert>}
+              {warning && <Alert variant="warning">{warning}</Alert>}
+              {showSwitchOption && (
+                <div className="d-grid my-3">
+                  <Button 
+                    variant="warning" 
+                    onClick={handleSwitchToStudent}
+                  >
+                    Switch to Student Registration
+                  </Button>
+                </div>
+              )}
               {success && (
                 <Alert variant="success">
                   Registration successful! Redirecting to login...
@@ -191,7 +268,12 @@ function Register() {
                         value={formData.ucid}
                         onChange={handleChange}
                         required
+                        pattern="[3][0-9]{7}"
+                        title="UCID must be 8 digits starting with 3"
                       />
+                      <Form.Text className="text-muted">
+                        Must be an 8-digit number starting with 3
+                      </Form.Text>
                     </Form.Group>
 
                     <Form.Group className="mb-3">
@@ -212,6 +294,8 @@ function Register() {
                         value={formData.graduation_year}
                         onChange={handleChange}
                         required
+                        min={new Date().getFullYear()}
+                        max={new Date().getFullYear() + 10}
                       />
                     </Form.Group>
                   </>
@@ -247,6 +331,7 @@ function Register() {
                         name="website"
                         value={formData.website}
                         onChange={handleChange}
+                        placeholder="https://example.com"
                       />
                     </Form.Group>
 
@@ -269,13 +354,27 @@ function Register() {
                     type="submit"
                     disabled={isSubmitting}
                   >
-                    {isSubmitting ? 'Registering...' : 'Register'}
+                    {isSubmitting ? (
+                      <>
+                        <Spinner
+                          as="span"
+                          animation="border"
+                          size="sm"
+                          role="status"
+                          aria-hidden="true"
+                          className="me-2"
+                        />
+                        Registering...
+                      </>
+                    ) : (
+                      'Register'
+                    )}
                   </Button>
                 </div>
               </Form>
 
               <div className="mt-3 text-center">
-                Already have an account? <a href="/login">Login here</a>
+                Already have an account? <Link to="/login">Login here</Link>
               </div>
             </Card.Body>
           </Card>

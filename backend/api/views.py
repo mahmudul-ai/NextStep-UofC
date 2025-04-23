@@ -2,8 +2,7 @@ from rest_framework import viewsets, generics, status
 from rest_framework.permissions import IsAuthenticatedOrReadOnly, AllowAny
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework.response import Response
-# from django.contrib.auth import get_user_model
-from django.contrib.auth import authenticate
+from django.contrib.auth import get_user_model
 
 from .models import *
 from .serializers import *
@@ -14,95 +13,67 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
-        # Get raw request data from context (since user_type isn’t part of TokenObtainPairSerializer by default)
-        request = self.context.get("request")
-        email = attrs.get("username")  # since we set 'username' = email in view
-        password = attrs.get("password")
-        user_type = request.data.get("user_type") if request else None
-
-        if not email or not password or not user_type:
-            raise serializers.ValidationError("Must include email, password, and user_type")
-
-        # Authenticate using username (email) and password
-        user = authenticate(request=request, username=email, password=password)
-        if user is None:
-            raise serializers.ValidationError("Invalid email or password")
-        if user.user_type != user_type:
-            raise serializers.ValidationError("Invalid user type")
-
-        # Save user for later access in the view
-        self.user = user
-
-        # Continue with parent token generation
-        data = super().validate(attrs)
-        return data
-
+        # Rename 'email' to 'username' to match Django's expectations
+        attrs['username'] = attrs.get('email', attrs.get('username', ''))
+        return super().validate(attrs)
+    
 class LoginView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
     permission_classes = [AllowAny]
 
     def post(self, request, *args, **kwargs):
-        # Copy and map 'email' -> 'username' to work with SimpleJWT expectations
-        data = request.data.copy()
-        email = data.get("email")
-        if not email:
-            return Response({
-                "status": "error",
-                "message": "Email is required"
-            }, status=status.HTTP_400_BAD_REQUEST)
-
-        data["username"] = email  # SimpleJWT uses 'username'
-
-        # Pass both modified data and context to serializer
-        serializer = self.get_serializer(data=data, context={"request": request})
-
+        # Ensure the request data contains 'username' field
+        request.data['username'] = request.data.get('email', '')
+        
+        serializer = self.get_serializer(data=request.data)
+        
         try:
             serializer.is_valid(raise_exception=True)
         except Exception as e:
             return Response({
-                "status": "error",
-                "message": "Invalid credentials",
-                "detail": str(serializer.errors)
+                'status': 'error',
+                'message': 'Invalid credentials',
+                'detail': str(e)
             }, status=status.HTTP_401_UNAUTHORIZED)
-
+        
         user = serializer.user
         user_data = {
-            "email": user.email,
-            "first_name": user.first_name,
-            "last_name": user.last_name,
-            "user_type": user.user_type,
+            'email': user.email,
+            'first_name': user.first_name,
+            'last_name': user.last_name,
+            'user_type': user.user_type,
         }
-
-        # Add profile data
+        
+        # Get profile data without using reverse relations
         try:
-            if user.user_type == "student":
+            if user.user_type == 'student':
                 student = Student.objects.filter(Email=user.email).first()
                 if student:
                     user_data.update({
-                        "ucid": student.UCID,
-                        "major": student.Major,
-                        "graduation_year": student.GraduationYear,
+                        'ucid': student.UCID,
+                        'major': student.Major,
+                        'graduation_year': student.GraduationYear
                     })
-            elif user.user_type == "employer":
+                    
+            elif user.user_type == 'employer':
                 employer = Employer.objects.filter(Email=user.email).first()
                 if employer:
                     user_data.update({
-                        "company_name": employer.CompanyName,
-                        "industry": employer.Industry,
-                        "website": employer.Website,
-                        "description": employer.Description,
+                        'company_name': employer.CompanyName,
+                        'industry': employer.Industry,
+                        'website': employer.Website,
+                        'description': employer.Description
                     })
+                    
         except Exception as e:
             print(f"Error getting profile data: {e}")
-
+        
         return Response({
-            "status": "success",
-            "access": serializer.validated_data["access"],
-            "refresh": serializer.validated_data["refresh"],
-            "user": user_data
+            'status': 'success',
+            'token': serializer.validated_data['access'],
+            'refresh_token': serializer.validated_data['refresh'],
+            'user': user_data
         })
-
-
 
 class RegistrationAPIView(generics.CreateAPIView):
     serializer_class = RegisterSerializer

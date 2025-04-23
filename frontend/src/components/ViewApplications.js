@@ -33,7 +33,41 @@ function ViewApplications() {
         }
         
         if (response?.data) {
-          setApplications(response.data);
+          // Format application data to handle backend field names
+          const formattedApplications = response.data.map(app => {
+            // Handle both backend and frontend field name formats
+            return {
+              applicationId: app.ApplicationID || app.applicationId,
+              applicantUcid: app.ApplicantUCID || app.applicantUcid,
+              jobId: app.JobID || app.jobId,
+              employerId: app.EmployerID || app.employerId,
+              status: app.Status || app.status,
+              dateApplied: app.DateApplied || app.dateApplied,
+              lastUpdated: app.lastUpdated || null,
+              feedback: app.feedback || '',
+              // Format the job data if it exists
+              job: app.job ? {
+                jobId: app.job.JobID || app.job.jobId,
+                jobTitle: app.job.JobTitle || app.job.jobTitle,
+                companyName: app.job.CompanyName || app.job.companyName,
+                location: app.job.Location || app.job.location,
+                salary: app.job.Salary || app.job.salary,
+                deadline: app.job.Deadline || app.job.deadline
+              } : null,
+              // Format the student data if it exists
+              student: app.student ? {
+                ucid: app.student.UCID || app.student.ucid,
+                name: app.student.name || `${app.student.FName || ''} ${app.student.LName || ''}`.trim(),
+                firstName: app.student.FName || app.student.firstName,
+                lastName: app.student.LName || app.student.lastName,
+                email: app.student.Email || app.student.email,
+                major: app.student.Major || app.student.major,
+                graduationYear: app.student.GraduationYear || app.student.graduationYear
+              } : null
+            };
+          });
+          
+          setApplications(formattedApplications);
         }
         
         setLoading(false);
@@ -49,13 +83,14 @@ function ViewApplications() {
 
   // Format date display
   const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
     const options = { year: 'numeric', month: 'short', day: 'numeric' };
     return new Date(dateString).toLocaleDateString('en-US', options);
   };
   
   // Get status badge variant
   const getStatusBadgeVariant = (status) => {
-    switch (status.toLowerCase()) {
+    switch (status?.toLowerCase()) {
       case 'pending':
       case 'submitted':
         return 'warning';
@@ -77,7 +112,7 @@ function ViewApplications() {
   
   // Format status text
   const formatStatus = (status) => {
-    switch (status.toLowerCase()) {
+    switch (status?.toLowerCase()) {
       case 'pending':
         return 'Pending Review';
       case 'reviewed':
@@ -94,7 +129,7 @@ function ViewApplications() {
       case 'submitted':
         return 'Submitted';
       default:
-        return status.charAt(0).toUpperCase() + status.slice(1);
+        return status ? status.charAt(0).toUpperCase() + status.slice(1) : 'Unknown';
     }
   };
   
@@ -102,11 +137,11 @@ function ViewApplications() {
   const StudentApplicationView = () => {
     // Group applications by status for easier viewing
     const activeApplications = applications.filter(app => 
-      !['rejected', 'accepted'].includes(app.status.toLowerCase())
+      !['rejected', 'accepted'].includes((app.status || '').toLowerCase())
     );
     
     const completedApplications = applications.filter(app => 
-      ['rejected', 'accepted'].includes(app.status.toLowerCase())
+      ['rejected', 'accepted'].includes((app.status || '').toLowerCase())
     );
     
     return (

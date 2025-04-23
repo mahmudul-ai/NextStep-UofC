@@ -1,83 +1,103 @@
 import React, { useState } from 'react';
-import { Container, Row, Col, Card, Form, Button, Alert } from 'react-bootstrap';
+import { Container, Form, Button, Alert, Card, Spinner } from 'react-bootstrap';
 import { useNavigate, Link } from 'react-router-dom';
 import api from '../services/api';
 
 function Login({ setToken, setUser }) {
+  // State for form fields, loading state, and error message
   const [formData, setFormData] = useState({
     email: '',
-    password: '',
-    user_type: 'student'
+    password: ''
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  
   const navigate = useNavigate();
-
+  
+  // Handle input changes
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
+    setFormData({
+      ...formData,
       [name]: value
-    }));
+    });
   };
-
+  
+  // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
     
+    // Basic validation
     if (!formData.email || !formData.password) {
-      setError('Please enter both email and password');
+      setError('Please enter both email and password.');
       return;
     }
-
+    
     try {
       setLoading(true);
+      setError('');
       
-      // API call to Django backend
-      const response = await api.post('/login/', {
-        email: formData.email,  // Changed from username to email to match your model
-        password: formData.password,
-        user_type: formData.user_type  // Include user_type in the request
-      });
-
-      // Handle response
-      const { access: token, refresh: refreshToken, user } = response.data;
+      // Call the login API
+      const response = await api.login(formData);
       
-      // Store authentication data
+      // Extract data from response
+      const { token, refresh_token, user } = response.data;
+      
+      // Store tokens in localStorage
       localStorage.setItem('accessToken', token);
-      localStorage.setItem('refreshToken', refreshToken);
-      localStorage.setItem('userData', JSON.stringify(user));
+      if (refresh_token) {
+        localStorage.setItem('refreshToken', refresh_token);
+      }
       
-      // Update parent component state
+      // Update state in parent component
       setToken(token);
+      
+      // Store user type in localStorage
+      localStorage.setItem('userRole', user.user_type);
+      localStorage.setItem('email', formData.email);
+      
+      // Store additional user info if available
+      if (user.ucid) {
+        localStorage.setItem('ucid', user.ucid);
+      }
+      
+      if (user.company_name) {
+        localStorage.setItem('companyName', user.company_name);
+      }
+      
+      // Update user state in parent component
       setUser(user);
       
-      // Redirect based on user type
-      const redirectPath = {
-        student: '/student-dashboard',
-        employer: '/employer-dashboard',
-        moderator: '/moderator-dashboard'
-      }[user.user_type] || '/';
+      // Fetch additional user profile data
+      const enrichedUser = await api.getUserProfile(user);
       
-      navigate(redirectPath);
-      
-    } catch (err) {
-      console.error('Login error:', err);
-      
-      // Enhanced error handling
-      let errorMessage = 'Login failed. Please try again.';
-      
-      if (err.response) {
-        if (err.response.data.detail) {
-          errorMessage = err.response.data.detail;
-        } else if (err.response.data.message) {
-          errorMessage = err.response.data.message;
-        } else if (err.response.data.non_field_errors) {
-          errorMessage = err.response.data.non_field_errors.join(' ');
+      // If the user is a student, check if they're also a moderator
+      if (user.user_type === 'student' && user.ucid) {
+        try {
+          const moderatorResponse = await api.checkModeratorStatus(user.ucid);
+          if (moderatorResponse.data.isModerator) {
+            console.log('User is also a moderator:', moderatorResponse.data);
+            localStorage.setItem('moderatorId', moderatorResponse.data.moderatorId);
+          }
+        } catch (err) {
+          console.error('Error checking moderator status:', err);
         }
       }
       
-      setError(errorMessage);
+      // Redirect based on user type
+      if (user.user_type === 'student') {
+        navigate('/student-dashboard');
+      } else if (user.user_type === 'employer') {
+        navigate('/employer-dashboard');
+      } else if (user.user_type === 'moderator') {
+        navigate('/moderator-dashboard');
+      } else {
+        navigate('/');
+      }
+      
+    } catch (err) {
+      console.error('Login error:', err);
+      setError(err.response?.data?.message || 'Invalid credentials. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -85,97 +105,71 @@ function Login({ setToken, setUser }) {
 
   return (
     <Container className="py-5">
-      <Row className="justify-content-center">
-        <Col md={8} lg={6}>
-          <Card className="shadow">
-            <Card.Body className="p-4">
-              <h2 className="text-center mb-4">NextStep Login</h2>
-              <p className="text-center text-muted mb-4">
-                Enter your credentials to access your account
-              </p>
-              
-              {error && <Alert variant="danger" dismissible onClose={() => setError('')}>{error}</Alert>}
-              
-              <Form onSubmit={handleSubmit}>
-                <Form.Group className="mb-3">
-                  <Form.Label>Email Address</Form.Label>
-                  <Form.Control
-                    type="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleChange}
-                    placeholder="Enter your registered email"
-                    required
-                    autoFocus
-                  />
-                </Form.Group>
-                
-                <Form.Group className="mb-3">
-                  <Form.Label>Password</Form.Label>
-                  <Form.Control
-                    type="password"
-                    name="password"
-                    value={formData.password}
-                    onChange={handleChange}
-                    placeholder="Enter password"
-                    required
-                  />
-                </Form.Group>
-
-                <Form.Group className="mb-3">
-                  <Form.Label>Account Type</Form.Label>
-                  <Form.Select
-                    name="user_type"
-                    value={formData.user_type}
-                    onChange={handleChange}
-                    required
-                  >
-                    <option value="student">Student</option>
-                    <option value="employer">Employer</option>
-                    <option value="moderator">Moderator</option>
-                  </Form.Select>
-                </Form.Group>
-                
-                <div className="d-grid mb-3">
-                  <Button 
-                    variant="primary" 
-                    type="submit"
-                    disabled={loading}
-                    size="lg"
-                  >
-                    {loading ? 'Logging in...' : 'Login'}
-                  </Button>
-                </div>
-
-                <div className="d-flex justify-content-between">
-                  <div className="form-check">
-                    <input
-                      type="checkbox"
-                      className="form-check-input"
-                      id="rememberMe"
+      <Card className="mx-auto shadow" style={{ maxWidth: '450px' }}>
+        <Card.Header className="bg-primary text-white text-center">
+          <h3 className="mb-0">Login to NextStep UofC</h3>
+        </Card.Header>
+        
+        <Card.Body className="p-4">
+          {error && <Alert variant="danger">{error}</Alert>}
+          
+          <Form onSubmit={handleSubmit}>
+            <Form.Group className="mb-3">
+              <Form.Label>Email Address</Form.Label>
+              <Form.Control
+                type="email"
+                name="email"
+                value={formData.email}
+                onChange={handleChange}
+                placeholder="Enter your email"
+                required
+              />
+            </Form.Group>
+            
+            <Form.Group className="mb-3">
+              <Form.Label>Password</Form.Label>
+              <Form.Control
+                type="password"
+                name="password"
+                value={formData.password}
+                onChange={handleChange}
+                placeholder="Enter your password"
+                required
+              />
+            </Form.Group>
+            
+            <div className="d-grid gap-2">
+              <Button 
+                variant="primary" 
+                type="submit" 
+                disabled={loading}
+              >
+                {loading ? (
+                  <>
+                    <Spinner
+                      as="span"
+                      animation="border"
+                      size="sm"
+                      role="status"
+                      aria-hidden="true"
+                      className="me-2"
                     />
-                    <label className="form-check-label" htmlFor="rememberMe">
-                      Remember me
-                    </label>
-                  </div>
-                  <Link to="/forgot-password" className="text-primary">
-                    Forgot password?
-                  </Link>
-                </div>
-              </Form>
-              
-              <div className="mt-4 pt-3 border-top text-center">
-                <p className="mb-0">
-                  Don't have an account?{' '}
-                  <Link to="/register" className="fw-bold">
-                    Register here
-                  </Link>
-                </p>
-              </div>
-            </Card.Body>
-          </Card>
-        </Col>
-      </Row>
+                    Logging in...
+                  </>
+                ) : (
+                  'Login'
+                )}
+              </Button>
+            </div>
+          </Form>
+          
+          <div className="text-center mt-3">
+            <p className="mb-0">
+              Don't have an account? <Link to="/register">Register</Link>
+            </p>
+          </div>
+        </Card.Body>
+      </Card>
     </Container>
   );
 }

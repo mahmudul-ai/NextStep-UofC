@@ -27,18 +27,65 @@ function BrowseJobs() {
         const employerParam = searchParams.get('employer');
         const keywordParam = searchParams.get('keyword');
         const locationParam = searchParams.get('location');
-        const salaryParam = searchParams.get('salary');
+        const minSalaryParam = searchParams.get('minSalary');
+        const maxSalaryParam = searchParams.get('maxSalary');
+        const industryParam = searchParams.get('industry');
         
         if (employerParam) urlFilters.employerId = parseInt(employerParam);
         if (keywordParam) urlFilters.keyword = keywordParam;
         if (locationParam) urlFilters.location = locationParam;
-        if (salaryParam) urlFilters.salary = parseInt(salaryParam);
+        if (minSalaryParam) urlFilters.minSalary = parseInt(minSalaryParam);
+        if (maxSalaryParam) urlFilters.maxSalary = parseInt(maxSalaryParam);
+        if (industryParam) urlFilters.industry = industryParam;
         
         // Set active filters from URL params
         setActiveFilters(urlFilters);
         
         const response = await api.getJobs(urlFilters);
-        setJobs(response.data);
+        
+        // Map backend job data to frontend expected format if needed
+        const formattedJobs = response.data.map(job => {
+          // Check if this is backend data structure (has JobID instead of jobId)
+          if (job.JobID) {
+            // Get employer data (name) if available
+            return {
+              jobId: job.JobID,
+              employerId: job.Employer,
+              jobTitle: job.JobTitle,
+              companyName: job.CompanyName || "Company", // Fallback value
+              location: job.Location,
+              salary: job.Salary,
+              deadline: job.Deadline,
+              description: job.Description,
+              status: job.Status || "Active"
+            };
+          }
+          // Return as is if it's already in the frontend format
+          return job;
+        });
+        
+        // Filter the jobs client-side if needed for compatibility
+        let filteredJobs = formattedJobs;
+        
+        // Apply any additional filters that can't be done on the server
+        if (minSalaryParam && !urlFilters.minSalary) {
+          filteredJobs = filteredJobs.filter(job => 
+            job.salary >= parseInt(minSalaryParam)
+          );
+        }
+        
+        if (maxSalaryParam && !urlFilters.maxSalary) {
+          filteredJobs = filteredJobs.filter(job => 
+            job.salary <= parseInt(maxSalaryParam)
+          );
+        }
+        
+        // Filter by active status (exclude rejected/expired jobs)
+        filteredJobs = filteredJobs.filter(job => 
+          job.status === 'Active' || job.status === 'Pending'
+        );
+        
+        setJobs(filteredJobs);
         setLoading(false);
       } catch (err) {
         console.error("Error fetching jobs", err);
@@ -57,7 +104,8 @@ function BrowseJobs() {
     
     if (filterData.keyword) newSearchParams.keyword = filterData.keyword;
     if (filterData.location) newSearchParams.location = filterData.location;
-    if (filterData.minSalary) newSearchParams.salary = filterData.minSalary;
+    if (filterData.minSalary) newSearchParams.minSalary = filterData.minSalary;
+    if (filterData.maxSalary) newSearchParams.maxSalary = filterData.maxSalary;
     if (filterData.industry) newSearchParams.industry = filterData.industry;
     
     // Keep employer param if it exists in URL
@@ -73,7 +121,7 @@ function BrowseJobs() {
       <h2 className="mb-4">Browse Jobs</h2>
       
       {/* Job Search Filters */}
-      <JobSearchFilters onApplyFilters={handleApplyFilters} />
+      <JobSearchFilters onApplyFilters={handleApplyFilters} initialFilters={activeFilters} />
 
       {/* Display error message if something went wrong */}
       {error && <Alert variant="danger">{error}</Alert>}
