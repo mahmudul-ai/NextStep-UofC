@@ -7,7 +7,7 @@ function Login({ setToken, setUser }) {
   const [formData, setFormData] = useState({
     email: '',
     password: '',
-    user_type: 'student' // Default to student login
+    user_type: 'student'
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -35,15 +35,17 @@ function Login({ setToken, setUser }) {
       
       // API call to Django backend
       const response = await api.post('/login/', {
-        username: formData.email, // Django typically uses 'username' field
-        password: formData.password
+        email: formData.email,  // Changed from username to email to match your model
+        password: formData.password,
+        user_type: formData.user_type  // Include user_type in the request
       });
 
-      // Handle Django REST Framework token response
-      const { token, user } = response.data;
+      // Handle response
+      const { access: token, refresh: refreshToken, user } = response.data;
       
       // Store authentication data
       localStorage.setItem('accessToken', token);
+      localStorage.setItem('refreshToken', refreshToken);
       localStorage.setItem('userData', JSON.stringify(user));
       
       // Update parent component state
@@ -51,29 +53,25 @@ function Login({ setToken, setUser }) {
       setUser(user);
       
       // Redirect based on user type
-      switch(user.user_type) {
-        case 'student':
-          navigate('/student-dashboard');
-          break;
-        case 'employer':
-          navigate('/employer-dashboard');
-          break;
-        case 'moderator':
-          navigate('/moderator-dashboard');
-          break;
-        default:
-          navigate('/');
-      }
+      const redirectPath = {
+        student: '/student-dashboard',
+        employer: '/employer-dashboard',
+        moderator: '/moderator-dashboard'
+      }[user.user_type] || '/';
+      
+      navigate(redirectPath);
       
     } catch (err) {
       console.error('Login error:', err);
       
-      // Handle different error response formats
+      // Enhanced error handling
       let errorMessage = 'Login failed. Please try again.';
       
       if (err.response) {
         if (err.response.data.detail) {
-          errorMessage = err.response.data.detail; // DRF default error format
+          errorMessage = err.response.data.detail;
+        } else if (err.response.data.message) {
+          errorMessage = err.response.data.message;
         } else if (err.response.data.non_field_errors) {
           errorMessage = err.response.data.non_field_errors.join(' ');
         }
@@ -88,12 +86,15 @@ function Login({ setToken, setUser }) {
   return (
     <Container className="py-5">
       <Row className="justify-content-center">
-        <Col md={6} lg={5}>
+        <Col md={8} lg={6}>
           <Card className="shadow">
             <Card.Body className="p-4">
-              <h3 className="text-center mb-4">Login to NextStep</h3>
+              <h2 className="text-center mb-4">NextStep Login</h2>
+              <p className="text-center text-muted mb-4">
+                Enter your credentials to access your account
+              </p>
               
-              {error && <Alert variant="danger">{error}</Alert>}
+              {error && <Alert variant="danger" dismissible onClose={() => setError('')}>{error}</Alert>}
               
               <Form onSubmit={handleSubmit}>
                 <Form.Group className="mb-3">
@@ -103,8 +104,9 @@ function Login({ setToken, setUser }) {
                     name="email"
                     value={formData.email}
                     onChange={handleChange}
-                    placeholder="Enter your email"
+                    placeholder="Enter your registered email"
                     required
+                    autoFocus
                   />
                 </Form.Group>
                 
@@ -121,11 +123,12 @@ function Login({ setToken, setUser }) {
                 </Form.Group>
 
                 <Form.Group className="mb-3">
-                  <Form.Label>Login As</Form.Label>
+                  <Form.Label>Account Type</Form.Label>
                   <Form.Select
                     name="user_type"
                     value={formData.user_type}
                     onChange={handleChange}
+                    required
                   >
                     <option value="student">Student</option>
                     <option value="employer">Employer</option>
@@ -138,66 +141,37 @@ function Login({ setToken, setUser }) {
                     variant="primary" 
                     type="submit"
                     disabled={loading}
+                    size="lg"
                   >
                     {loading ? 'Logging in...' : 'Login'}
                   </Button>
                 </div>
 
-                <div className="text-center">
-                  <Link to="/forgot-password">Forgot password?</Link>
+                <div className="d-flex justify-content-between">
+                  <div className="form-check">
+                    <input
+                      type="checkbox"
+                      className="form-check-input"
+                      id="rememberMe"
+                    />
+                    <label className="form-check-label" htmlFor="rememberMe">
+                      Remember me
+                    </label>
+                  </div>
+                  <Link to="/forgot-password" className="text-primary">
+                    Forgot password?
+                  </Link>
                 </div>
               </Form>
               
               <div className="mt-4 pt-3 border-top text-center">
-                <p>Don't have an account? <Link to="/register">Register here</Link></p>
+                <p className="mb-0">
+                  Don't have an account?{' '}
+                  <Link to="/register" className="fw-bold">
+                    Register here
+                  </Link>
+                </p>
               </div>
-
-              {/* Development/testing only - remove in production
-              {process.env.NODE_ENV === 'development' && (
-                <div className="mt-3 pt-3 border-top">
-                  <small className="text-muted d-block text-center mb-2">
-                    Test Accounts (dev only):
-                  </small>
-                  <div className="text-center">
-                    <Button 
-                      variant="outline-secondary" 
-                      size="sm" 
-                      className="me-2 mb-2"
-                      onClick={() => setFormData({
-                        email: 'student@ucalgary.ca',
-                        password: 'testpass123',
-                        user_type: 'student'
-                      })}
-                    >
-                      Student
-                    </Button>
-                    <Button 
-                      variant="outline-secondary" 
-                      size="sm" 
-                      className="me-2 mb-2"
-                      onClick={() => setFormData({
-                        email: 'employer@company.com',
-                        password: 'testpass123',
-                        user_type: 'employer'
-                      })}
-                    >
-                      Employer
-                    </Button>
-                    <Button 
-                      variant="outline-secondary" 
-                      size="sm" 
-                      className="mb-2"
-                      onClick={() => setFormData({
-                        email: 'moderator@nextstep.ca',
-                        password: 'testpass123',
-                        user_type: 'moderator'
-                      })}
-                    >
-                      Moderator
-                    </Button>
-                  </div>
-                </div>
-              )} */}
             </Card.Body>
           </Card>
         </Col>

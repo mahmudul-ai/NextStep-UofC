@@ -9,11 +9,22 @@ from .serializers import *
 from .permissions import IsModerator
 from rest_framework.views import APIView
 
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    def validate(self, attrs):
+        # Rename 'email' to 'username' to match Django's expectations
+        attrs['username'] = attrs.get('email', attrs.get('username', ''))
+        return super().validate(attrs)
+    
 class LoginView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
     permission_classes = [AllowAny]
 
     def post(self, request, *args, **kwargs):
+        # Ensure the request data contains 'username' field
+        request.data['username'] = request.data.get('email', '')
+        
         serializer = self.get_serializer(data=request.data)
         
         try:
@@ -36,7 +47,6 @@ class LoginView(TokenObtainPairView):
         # Get profile data without using reverse relations
         try:
             if user.user_type == 'student':
-                # Find student by email since Student model has Email field
                 student = Student.objects.filter(Email=user.email).first()
                 if student:
                     user_data.update({
@@ -46,7 +56,6 @@ class LoginView(TokenObtainPairView):
                     })
                     
             elif user.user_type == 'employer':
-                # Find employer by email
                 employer = Employer.objects.filter(Email=user.email).first()
                 if employer:
                     user_data.update({
@@ -65,10 +74,6 @@ class LoginView(TokenObtainPairView):
             'refresh_token': serializer.validated_data['refresh'],
             'user': user_data
         })
-
-class CustomTokenObtainPairView(TokenObtainPairView):
-    serializer_class = CustomTokenObtainPairSerializer
-    permission_classes = [AllowAny]
 
 class RegistrationAPIView(generics.CreateAPIView):
     serializer_class = RegisterSerializer
