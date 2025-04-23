@@ -46,7 +46,7 @@ class Moderator(models.Model):
         db_table = 'moderator'
 
     def __str__(self):
-        return f"{self.student.Name} (Moderator)"
+        return f"{self.ModeratorID.UCID} (Moderator)"
 
 
 
