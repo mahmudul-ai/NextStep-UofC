@@ -4,8 +4,8 @@ import { Navbar, Nav, Container, Button } from 'react-bootstrap';
 import { NavLink } from 'react-router-dom';
 
 function NavigationBar({ token, setToken }) {
-  // Get user role and username from localStorage (set during login)
-  const userRole = localStorage.getItem('userRole'); // e.g., "recruiter" or "job_seeker"
+  // Get user role from localStorage (set during login)
+  const userRole = localStorage.getItem('userRole'); // e.g., "student" or "employer" or "moderator"
   const username = localStorage.getItem('username');
 
   // Handle logout: clear all auth-related data and reset token state
@@ -13,6 +13,9 @@ function NavigationBar({ token, setToken }) {
     localStorage.removeItem('accessToken');
     localStorage.removeItem('userRole');
     localStorage.removeItem('username');
+    localStorage.removeItem('ucid');
+    localStorage.removeItem('employerId');
+    localStorage.removeItem('moderatorId');
     setToken('');
   };
 
@@ -24,26 +27,54 @@ function NavigationBar({ token, setToken }) {
         <Navbar.Toggle aria-controls="navbar-nav" />
         <Navbar.Collapse id="navbar-nav">
           <Nav className="ms-auto">
-            {/* Always show "Browse Jobs" */}
+            {/* Common navigation links - regardless of login status */}
             <Nav.Link as={NavLink} to="/browse">Browse Jobs</Nav.Link>
+            <Nav.Link as={NavLink} to="/forum">Community Forum</Nav.Link>
 
             {/* Show when logged in */}
             {token ? (
               <>
-                {/* Show "Manage Jobs" only for recruiters */}
-                {userRole === 'recruiter' && (
-                  <Nav.Link as={NavLink} to="/manage">Manage Jobs</Nav.Link>
+                {/* Dashboard link - based on role */}
+                {userRole === 'student' && (
+                  <Nav.Link as={NavLink} to="/student-dashboard">Dashboard</Nav.Link>
                 )}
-                {userRole === 'recruiter' && (
-                <Nav.Link as={NavLink} to="/applications">View Applications</Nav.Link>    
+                
+                {userRole === 'employer' && (
+                  <Nav.Link as={NavLink} to="/employer-dashboard">Dashboard</Nav.Link>
+                )}
+                
+                {userRole === 'moderator' && (
+                  <Nav.Link as={NavLink} to="/moderator-dashboard">Dashboard</Nav.Link>
+                )}
+                
+                {/* Role-specific navigation links */}
+                {userRole === 'student' && (
+                  <>
+                    <Nav.Link as={NavLink} to="/application-history">My Applications</Nav.Link>
+                    <Nav.Link as={NavLink} to="/saved-jobs">Saved Jobs</Nav.Link>
+                  </>
+                )}
+                
+                {userRole === 'employer' && (
+                  <>
+                    <Nav.Link as={NavLink} to="/manage-jobs">Manage Jobs</Nav.Link>
+                    <Nav.Link as={NavLink} to="/applications">View Applicants</Nav.Link>
+                  </>
+                )}
+                
+                {userRole === 'moderator' && (
+                  <>
+                    <Nav.Link as={NavLink} to="/student-verifications">Student Verifications</Nav.Link>
+                    <Nav.Link as={NavLink} to="/employer-verifications">Employer Verifications</Nav.Link>
+                    <Nav.Link as={NavLink} to="/job-moderation">Job Moderation</Nav.Link>
+                  </>
                 )}
 
-                {/* Show username info if available */}
-                {username && (
-                  <Nav.Link as={NavLink} to="/account" className="me-3">
-                    Signed in as: <strong>{username}</strong>
-                  </Nav.Link>
-                )}
+                {/* Profile link - for all logged in users */}
+                <Nav.Link as={NavLink} to="/account">
+                  <i className="bi bi-person-circle me-1"></i>
+                  Profile
+                </Nav.Link>
 
                 {/* Logout button */}
                 <Button variant="outline-light" onClick={handleLogout}>
