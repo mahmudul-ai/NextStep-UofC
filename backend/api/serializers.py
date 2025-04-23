@@ -1,56 +1,106 @@
 from rest_framework import serializers
 from .models import *
 
+from rest_framework import serializers
+from .models import *
+
+from rest_framework import serializers
+from .models import *
+
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+
 class RegisterSerializer(serializers.ModelSerializer):
     user_type = serializers.ChoiceField(choices=CustomUser.USER_TYPE_CHOICES)
     password = serializers.CharField(write_only=True)
+    fname = serializers.CharField(write_only=True, source='first_name')
+    lname = serializers.CharField(write_only=True, source='last_name')
 
-    # extra fields for student
-    major = serializers.CharField(required=False)
-    graduation_year = serializers.IntegerField(required=False)
+    # Student fields
+    ucid = serializers.CharField(required=False, allow_blank=True)
+    major = serializers.CharField(required=False, allow_blank=True)
+    graduation_year = serializers.IntegerField(required=False, allow_null=True)
 
-    # extra fields for employer
-    company_name = serializers.CharField(required=False)
-    industry = serializers.CharField(required=False)
-    website = serializers.URLField(required=False, allow_blank=True, allow_null=True)
-    description = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    # Employer fields
+    company_name = serializers.CharField(required=False, allow_blank=True)
+    industry = serializers.CharField(required=False, allow_blank=True)
+    website = serializers.URLField(required=False, allow_blank=True)
+    description = serializers.CharField(required=False, allow_blank=True)
 
     class Meta:
         model = CustomUser
-        fields = ('username', 'email', 'password', 'user_type',
-                  'major', 'graduation_year',
-                  'company_name', 'industry', 'website', 'description')
+        fields = [
+            'email', 'password', 'user_type',
+            'fname', 'lname',
+            'ucid', 'major', 'graduation_year',
+            'company_name', 'industry', 'website', 'description'
+        ]
 
     def create(self, validated_data):
         user_type = validated_data.pop('user_type')
         password = validated_data.pop('password')
+        email = validated_data.pop('email')
+        
+        # Create user
         user = CustomUser.objects.create_user(
-            username=validated_data['username'],
-            email=validated_data.get('email'),
+            username=email,
+            email=email,
             password=password,
-            user_type=user_type
+            user_type=user_type,
+            first_name=validated_data.pop('first_name', ''),
+            last_name=validated_data.pop('last_name', '')
         )
 
+        # Create profile (but don't include in response)
         if user_type == 'student':
             Student.objects.create(
-                UCID=user.username,
-                Name=user.username,
+                UCID=validated_data.pop('ucid', ''),
+                FName=user.first_name,
+                LName=user.last_name,
                 Email=user.email,
-                Major=validated_data.get('major'),
-                GraduationYear=validated_data.get('graduation_year')
+                Major=validated_data.pop('major', ''),
+                GraduationYear=validated_data.pop('graduation_year', None)
             )
-
         elif user_type == 'employer':
             Employer.objects.create(
+                CompanyName=validated_data.pop('company_name', ''),
                 Email=user.email,
-                CompanyName=validated_data.get('company_name'),
-                Industry=validated_data.get('industry'),
-                Website=validated_data.get('website'),
-                Description=validated_data.get('description'),
+                Industry=validated_data.pop('industry', ''),
+                Website=validated_data.pop('website', ''),
+                Description=validated_data.pop('description', ''),
                 VerificationStatus='Pending'
             )
 
-        return user
+        return {
+            'status': 'success',
+            'email': user.email,
+            'user_type': user_type
+        }
+
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    @classmethod
+    def get_token(cls, user):
+        token = super().get_token(user)
+        
+        # Add custom claims
+        token['user_type'] = user.user_type
+        token['email'] = user.email
+        
+        return token
+
+    def validate(self, attrs):
+        data = super().validate(attrs)
+        
+        # Add custom response data
+        data['user_type'] = self.user.user_type
+        data['email'] = self.user.email
+        
+        return data
+    
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CustomUser
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'user_type']
+    
 
 class StudentSerializer(serializers.ModelSerializer):
     class Meta:
@@ -82,27 +132,27 @@ class EmployerSerializer(serializers.ModelSerializer):
         model = Employer
         fields = '__all__'
 
-class JobSerializer(serializers.ModelSerializer):
+class JobOpeningSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Job
+        model = JobOpening
         fields = '__all__'
 
-class ApplicationSerializer(serializers.ModelSerializer):
+class JobApplicationSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Application
+        model = JobApplication
         fields = '__all__'
 
-class VerificationSerializer(serializers.ModelSerializer):
+class VerifyApplicantSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Verification
+        model = VerifyApplicant
         fields = '__all__'
 
-class EmployerVerificationSerializer(serializers.ModelSerializer):
+class VerifyEmployerSerializer(serializers.ModelSerializer):
     class Meta:
-        model = EmployerVerification
+        model = VerifyEmployer
         fields = '__all__'
 
-class JobModerationSerializer(serializers.ModelSerializer):
+class ReviewsSerializer(serializers.ModelSerializer):
     class Meta:
-        model = JobModeration
+        model = Reviews
         fields = '__all__'

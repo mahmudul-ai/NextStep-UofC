@@ -15,8 +15,7 @@
 
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import CustomUser, Student, Moderator, Employer, Applicant, Post, Volunteer, Job, Application, Verification, EmployerVerification, JobModeration
-
+from .models import *
 # Customize the Django admin interface for CustomUser model
 class CustomUserAdmin(UserAdmin):
     model = CustomUser
@@ -35,19 +34,19 @@ admin.site.register(CustomUser, CustomUserAdmin)
 # Register the other models in the admin panel with default configurations
 @admin.register(Student)
 class StudentAdmin(admin.ModelAdmin):
-    list_display = ('user', 'UCID', 'Major', 'GraduationYear')
+    list_display = ('UCID', 'FName', 'LName', 'Email', 'Major', 'GraduationYear')
 
 @admin.register(Moderator)
 class ModeratorAdmin(admin.ModelAdmin):
-    list_display = ('student',)
+    list_display = ('ModeratorID',)
 
 @admin.register(Employer)
 class EmployerAdmin(admin.ModelAdmin):
-    list_display = ('user', 'CompanyName', 'Industry', 'Website', 'VerificationStatus')
+    list_display = ('CompanyName', 'Email', 'Industry', 'Website', 'Description','VerificationStatus')
 
 @admin.register(Applicant)
 class ApplicantAdmin(admin.ModelAdmin):
-    list_display = ('student', 'CGPA', 'Resume', 'VerificationStatus')
+    list_display = ('SUCID', 'CGPA', 'Resume', 'VerificationStatus')
 
 @admin.register(Post)
 class PostAdmin(admin.ModelAdmin):
@@ -57,22 +56,22 @@ class PostAdmin(admin.ModelAdmin):
 class VolunteerAdmin(admin.ModelAdmin):
     list_display = ('SUCID', 'Hours')
 
-@admin.register(Job)
-class JobAdmin(admin.ModelAdmin):
+@admin.register(JobOpening)
+class JobOpeningAdmin(admin.ModelAdmin):
     list_display = ('Employer', 'JobTitle', 'Description', 'Salary', 'Location', 'Deadline')
 
-@admin.register(Application)
-class ApplicationAdmin(admin.ModelAdmin):
-    list_display = ('ApplicantUCID', 'Job', 'Employer', 'Status', 'DateApplied')
+@admin.register(JobApplication)
+class JobApplicationAdmin(admin.ModelAdmin):
+    list_display = ('ApplicantUCID', 'JobID', 'EmployerID', 'Status', 'DateApplied')
 
-@admin.register(Verification)
-class VerificationAdmin(admin.ModelAdmin):
-    list_display = ('Moderator', 'ApplicantUCID', 'VerificationStatus', 'VerificationDate')
+@admin.register(VerifyApplicant)
+class VerifyApplicantAdmin(admin.ModelAdmin):
+    list_display = ('ModeratorID', 'ApplicantUCID', 'VerificationStatus', 'VerificationDate')
 
-@admin.register(EmployerVerification)
-class EmployerVerificationAdmin(admin.ModelAdmin):
-    list_display = ('Moderator', 'Employer', 'VerificationStatus', 'VerificationDate')
+@admin.register(VerifyEmployer)
+class VerifyEmployerAdmin(admin.ModelAdmin):
+    list_display = ('ModeratorID', 'EmployerID', 'VerificationStatus', 'VerificationDate')
 
-@admin.register(JobModeration)
+@admin.register(Reviews)
 class JobModerationAdmin(admin.ModelAdmin):
-    list_display = ('Moderator', 'Job', 'Employer')
+    list_display = ('ModeratorID', 'JobID', 'EmployerID')

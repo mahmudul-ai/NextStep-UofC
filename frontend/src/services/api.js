@@ -8,7 +8,7 @@ const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000/api
 // INTEGRATION POINT #1:
 // Change this flag to 'false' when you're ready to connect to the real backend
 // This is the main switch for transitioning from mock data to real API
-const USE_MOCK_DATA = true;
+const USE_MOCK_DATA = false;
 
 // Create an Axios instance with base URL and default headers
 const api = axios.create({

@@ -1,6 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
-
+from django.core.validators import MaxValueValidator, MinValueValidator
 
 class CustomUser(AbstractUser):
     USER_TYPE_CHOICES = (
@@ -8,14 +8,27 @@ class CustomUser(AbstractUser):
         ('employer', 'Employer'),
     )
     user_type = models.CharField(max_length=20, choices=USER_TYPE_CHOICES, default='student')
+    bio = models.TextField(blank=True, null=True)
+    pdf_file = models.FileField(upload_to="resumes/", null=True, blank=True)
 
     def __str__(self):
         return f"{self.username} ({self.get_user_type_display()})"
 
 
 class Student(models.Model):
-    user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, primary_key=True)
-    UCID = models.CharField(max_length=8, unique=True, db_column='UCID')
+    # user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, primary_key=True)
+    UCID = models.IntegerField(
+        unique=True,
+        db_column='UCID',
+        primary_key=True,
+        validators=[
+            MaxValueValidator(39999999),  # Maximum 8 digits
+            MinValueValidator(30000000)   # Minimum 8 digits (if required)
+        ]
+    )
+    FName = models.CharField(max_length=255, db_column='FName')
+    LName = models.CharField(max_length=255, db_column='LName')
+    Email = models.EmailField(max_length=255, unique=True, db_column='Email')
     Major = models.CharField(max_length=255, null=True, blank=True, db_column='Major')
     GraduationYear = models.IntegerField(null=True, blank=True, db_column='GraduationYear')
 
@@ -23,11 +36,11 @@ class Student(models.Model):
         db_table = 'student'
 
     def __str__(self):
-        return self.user.get_full_name()
+        return f'{self.FName} {self.LName} ({self.UCID})'
 
 
 class Moderator(models.Model):
-    student = models.OneToOneField(Student, on_delete=models.CASCADE, primary_key=True)
+    ModeratorID  = models.OneToOneField(Student, on_delete=models.CASCADE, primary_key=True, db_column='ModeratorID')
 
     class Meta:
         db_table = 'moderator'
@@ -38,10 +51,12 @@ class Moderator(models.Model):
 
 
 class Employer(models.Model):
-    user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, primary_key=True)
+    # user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, primary_key=True)
+    EmployerID = models.AutoField(primary_key=True, db_column='EmployerID')
     CompanyName = models.CharField(max_length=255, db_column='CompanyName')
+    Email = models.EmailField(max_length=255, unique=True, db_column='Email') 
     Industry = models.CharField(max_length=255, null=True, blank=True, db_column='Industry')
-    Website = models.URLField(null=True, blank=True, db_column='Website')
+    Website = models.URLField(null=True, blank=True, db_column='Website')  #new
     Description = models.TextField(null=True, blank=True, db_column='Description')
     VerificationStatus = models.CharField(max_length=50, db_column='VerificationStatus')
 
@@ -53,7 +68,7 @@ class Employer(models.Model):
 
 
 class Applicant(models.Model):
-    student = models.OneToOneField(Student, on_delete=models.CASCADE, primary_key=True, db_column='SUCID')
+    SUCID = models.OneToOneField(Student, on_delete=models.CASCADE, primary_key=True, db_column='SUCID')
     CGPA = models.DecimalField(max_digits=3, decimal_places=2, db_column='CGPA')
     Resume = models.FileField(upload_to="resume/", db_column='Resume')
     VerificationStatus = models.CharField(max_length=50, db_column='VerificationStatus')
@@ -80,7 +95,7 @@ class Volunteer(models.Model):
         db_table = 'volunteer'
 
 
-class Job(models.Model):
+class JobOpening(models.Model):
     JobID = models.AutoField(primary_key=True, db_column='JobID')
     Employer = models.ForeignKey(Employer, on_delete=models.CASCADE, db_column='EmployerID')
     JobTitle = models.CharField(max_length=255, db_column='JobTitle')
@@ -90,48 +105,48 @@ class Job(models.Model):
     Deadline = models.DateField(db_column='Deadline')
 
     class Meta:
-        db_table = 'job'
+        db_table = 'job_opening'
 
 
-class Application(models.Model):
+class JobApplication(models.Model):
     ApplicationID = models.AutoField(primary_key=True, db_column='ApplicationID')
     ApplicantUCID = models.ForeignKey(Student, on_delete=models.CASCADE, db_column='ApplicantUCID')
-    Job = models.ForeignKey(Job, on_delete=models.CASCADE, db_column='JobID')
-    Employer = models.ForeignKey(Employer, on_delete=models.CASCADE, db_column='EmployerID')
+    JobID = models.ForeignKey(JobOpening, on_delete=models.CASCADE, db_column='JobID')
+    EmployerID = models.ForeignKey(Employer, on_delete=models.CASCADE, db_column='EmployerID')
     Status = models.CharField(max_length=50, db_column='Status')
     DateApplied = models.DateField(db_column='DateApplied')
 
     class Meta:
-        db_table = 'application'
+        db_table = 'job_application'
 
 
-class Verification(models.Model):
+class VerifyApplicant(models.Model):
     VID = models.AutoField(primary_key=True, db_column='VID')
-    Moderator = models.ForeignKey(Moderator, on_delete=models.CASCADE, db_column='ModeratorID')
+    ModeratorID = models.ForeignKey(Moderator, on_delete=models.CASCADE, db_column='ModeratorID')
     ApplicantUCID = models.ForeignKey(Student, on_delete=models.CASCADE, db_column='ApplicantUCID')
     VerificationStatus = models.CharField(max_length=50, db_column='VerificationStatus')
     VerificationDate = models.DateField(db_column='VerificationDate')
 
     class Meta:
-        db_table = 'verification'
+        db_table = 'verify_applicant'
 
 
-class EmployerVerification(models.Model):
+class VerifyEmployer(models.Model):
     VID = models.AutoField(primary_key=True, db_column='VID')
-    Moderator = models.ForeignKey(Moderator, on_delete=models.CASCADE, db_column='ModeratorID')
-    Employer = models.ForeignKey(Employer, on_delete=models.CASCADE, db_column='EmployerID')
+    ModeratorID = models.ForeignKey(Moderator, on_delete=models.CASCADE, db_column='ModeratorID')
+    EmployerID = models.ForeignKey(Employer, on_delete=models.CASCADE, db_column='EmployerID')
     VerificationStatus = models.CharField(max_length=50, db_column='VerificationStatus')
     VerificationDate = models.DateField(db_column='VerificationDate')
 
     class Meta:
-        db_table = 'employer_verification'
+        db_table = 'verify_employer'
 
 
-class JobModeration(models.Model):
-    Moderator = models.ForeignKey(Moderator, on_delete=models.CASCADE, db_column='ModeratorID')
-    Job = models.ForeignKey(Job, on_delete=models.CASCADE, db_column='JobID')
-    Employer = models.ForeignKey(Employer, on_delete=models.CASCADE, db_column='EmployerID')
+class Reviews(models.Model):
+    ModeratorID = models.ForeignKey(Moderator, on_delete=models.CASCADE, db_column='ModeratorID')
+    JobID = models.ForeignKey(JobOpening, on_delete=models.CASCADE, db_column='JobID')
+    EmployerID = models.ForeignKey(Employer, on_delete=models.CASCADE, db_column='EmployerID')
 
     class Meta:
-        db_table = 'job_moderation'
-        unique_together = ('Moderator', 'Job', 'Employer')
+        db_table = 'reviews'
+        unique_together = ('ModeratorID', 'JobID', 'EmployerID')

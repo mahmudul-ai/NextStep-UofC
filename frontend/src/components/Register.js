@@ -1,180 +1,279 @@
-// Import React and necessary Bootstrap components
 import React, { useState } from 'react';
-import { Container, Row, Col, Card, Form, Button } from 'react-bootstrap';
-import api from '../services/api'; // Axios instance for API calls
+import { Container, Row, Col, Card, Form, Button, Alert } from 'react-bootstrap';
+import { useNavigate } from 'react-router-dom';
+import api from '../services/api';
 
 function Register() {
-  // Form input state
-  const [username, setUsername] = useState('');
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName]  = useState('');
-  const [email, setEmail]        = useState('');
-  const [password, setPassword]  = useState('');
-  const [confirm, setConfirm]    = useState('');
-  const [role, setRole]          = useState('');
-  const [ucid, setUcid]          = useState('');
+  const navigate = useNavigate();
+  const [formData, setFormData] = useState({
+    email: '',
+    password: '',
+    confirmPassword: '',
+    user_type: '',
+    fname: '',
+    lname: '',
+    ucid: '',
+    major: '',
+    graduation_year: '',
+    company_name: '',
+    industry: '',
+    website: '',
+    description: ''
+  });
 
-  // Feedback messages
-  const [error, setError]        = useState('');
-  const [message, setMessage]    = useState('');
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Handle form submission
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log('Register button clicked!');
+    setError('');
+    setIsSubmitting(true);
 
-    // Basic validation to check if passwords match
-    if (password !== confirm) {
-      setError('Passwords do not match.');
+    // Basic validation
+    if (formData.password !== formData.confirmPassword) {
+      setError("Passwords don't match");
+      setIsSubmitting(false);
       return;
     }
 
-    // Build the payload object to send to the backend
-    const payload = {
-      username,
-      first_name: firstName,
-      last_name: lastName,
-      email,
-      password,
-      user_type: role
-    };
-
-    // If the user is a job seeker, include their UCID
-    if (role === 'job_seeker') {
-      payload.ucid = parseInt(ucid, 10);
-    }
-
     try {
-      // Send registration request to backend
+      // Prepare payload based on user type
+      const payload = {
+        email: formData.email,
+        password: formData.password,
+        user_type: formData.user_type,
+        fname: formData.fname,
+        lname: formData.lname
+      };
+
+      // Add student-specific fields
+      if (formData.user_type === 'student') {
+        payload.ucid = formData.ucid;
+        payload.major = formData.major;
+        payload.graduation_year = formData.graduation_year;
+      }
+      // Add employer-specific fields
+      else if (formData.user_type === 'employer') {
+        payload.company_name = formData.company_name;
+        payload.industry = formData.industry;
+        payload.website = formData.website;
+        payload.description = formData.description;
+      }
+
       const response = await api.post('/register/', payload);
-      console.log('Registration successful!', response.data);
-
-      setMessage("Registration successful! Please wait for admin approval if you're a job seeker.");
-      setError('');
-
-      // Clear form fields
-      setFirstName('');
-      setLastName('');
-      setEmail('');
-      setPassword('');
-      setConfirm('');
-      setRole('');
-      setUcid('');
+      console.log(response);
+      
+      if (response.data.status === 'success') {
+        // Registration successful
+        
+        setSuccess(true);
+        setTimeout(() => {
+          navigate('/login');
+        }, 3000);
+      }
     } catch (err) {
-      console.error('Registration failed', err);
-      setError('Registration failed. Please try again.');
-      setMessage('');
+      // Handle network or server errors
+      setError(err.response?.data?.error || 'Registration failed. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   return (
     <Container className="py-5">
       <Row className="justify-content-center">
-        <Col md={6} lg={4}>
+        <Col md={8} lg={6}>
           <Card className="p-4 shadow">
             <Card.Body>
               <h3 className="mb-4 text-center">Register</h3>
+              
+              {error && <Alert variant="danger">{error}</Alert>}
+              {success && (
+                <Alert variant="success">
+                  Registration successful! Redirecting to login...
+                </Alert>
+              )}
 
-              {/* Display error or success messages */}
-              {error && <p className="text-danger text-center">{error}</p>}
-              {message && <p className="text-success text-center">{message}</p>}
-
-              {/* Registration form */}
               <Form onSubmit={handleSubmit}>
-                <Form.Group className="mb-3">
-                  <Form.Label>Username</Form.Label>
-                  <Form.Control
-                    type="text"
-                    placeholder="Enter username"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    required
-                  />
-                </Form.Group>
-
-                <Form.Group className="mb-3">
-                  <Form.Label>First Name</Form.Label>
-                  <Form.Control
-                    type="text"
-                    value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
-                    required
-                  />
-                </Form.Group>
-
-                <Form.Group className="mb-3">
-                  <Form.Label>Last Name</Form.Label>
-                  <Form.Control
-                    type="text"
-                    value={lastName}
-                    onChange={(e) => setLastName(e.target.value)}
-                    required
-                  />
-                </Form.Group>
+                <Row>
+                  <Col md={6}>
+                    <Form.Group className="mb-3">
+                      <Form.Label>First Name</Form.Label>
+                      <Form.Control
+                        name="fname"
+                        value={formData.fname}
+                        onChange={handleChange}
+                        required
+                      />
+                    </Form.Group>
+                  </Col>
+                  <Col md={6}>
+                    <Form.Group className="mb-3">
+                      <Form.Label>Last Name</Form.Label>
+                      <Form.Control
+                        name="lname"
+                        value={formData.lname}
+                        onChange={handleChange}
+                        required
+                      />
+                    </Form.Group>
+                  </Col>
+                </Row>
 
                 <Form.Group className="mb-3">
                   <Form.Label>Email</Form.Label>
                   <Form.Control
                     type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    name="email"
+                    value={formData.email}
+                    onChange={handleChange}
                     required
                   />
                 </Form.Group>
 
-                <Form.Group className="mb-3">
-                  <Form.Label>Password</Form.Label>
-                  <Form.Control
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                  />
-                </Form.Group>
+                <Row>
+                  <Col md={6}>
+                    <Form.Group className="mb-3">
+                      <Form.Label>Password</Form.Label>
+                      <Form.Control
+                        type="password"
+                        name="password"
+                        value={formData.password}
+                        onChange={handleChange}
+                        required
+                      />
+                    </Form.Group>
+                  </Col>
+                  <Col md={6}>
+                    <Form.Group className="mb-3">
+                      <Form.Label>Confirm Password</Form.Label>
+                      <Form.Control
+                        type="password"
+                        name="confirmPassword"
+                        value={formData.confirmPassword}
+                        onChange={handleChange}
+                        required
+                      />
+                    </Form.Group>
+                  </Col>
+                </Row>
 
                 <Form.Group className="mb-3">
-                  <Form.Label>Confirm Password</Form.Label>
-                  <Form.Control
-                    type="password"
-                    value={confirm}
-                    onChange={(e) => setConfirm(e.target.value)}
-                    required
-                  />
-                </Form.Group>
-
-                <Form.Group className="mb-3">
-                  <Form.Label>Select Role</Form.Label>
+                  <Form.Label>Register As</Form.Label>
                   <Form.Select
-                    value={role}
-                    onChange={(e) => setRole(e.target.value)}
+                    name="user_type"
+                    value={formData.user_type}
+                    onChange={handleChange}
                     required
                   >
                     <option value="">Select Role</option>
-                    <option value="job_seeker">Job Seeker</option>
-                    <option value="recruiter">Recruiter</option>
+                    <option value="student">Student</option>
+                    <option value="employer">Employer</option>
                   </Form.Select>
                 </Form.Group>
 
-                {/* Show UCID field only for job seekers */}
-                {role === 'job_seeker' && (
-                  <Form.Group className="mb-3">
-                    <Form.Label>UCID</Form.Label>
-                    <Form.Control
-                      type="number"
-                      value={ucid}
-                      onChange={(e) => setUcid(e.target.value)}
-                      required
-                    />
-                  </Form.Group>
+                {/* Student Fields */}
+                {formData.user_type === 'student' && (
+                  <>
+                    <Form.Group className="mb-3">
+                      <Form.Label>UCID</Form.Label>
+                      <Form.Control
+                        name="ucid"
+                        value={formData.ucid}
+                        onChange={handleChange}
+                        required
+                      />
+                    </Form.Group>
+
+                    <Form.Group className="mb-3">
+                      <Form.Label>Major</Form.Label>
+                      <Form.Control
+                        name="major"
+                        value={formData.major}
+                        onChange={handleChange}
+                        required
+                      />
+                    </Form.Group>
+
+                    <Form.Group className="mb-3">
+                      <Form.Label>Graduation Year</Form.Label>
+                      <Form.Control
+                        type="number"
+                        name="graduation_year"
+                        value={formData.graduation_year}
+                        onChange={handleChange}
+                        required
+                      />
+                    </Form.Group>
+                  </>
                 )}
 
-                {/* Submit button */}
-                <div className="d-grid">
-                  <Button variant="primary" type="submit">Register</Button>
+                {/* Employer Fields */}
+                {formData.user_type === 'employer' && (
+                  <>
+                    <Form.Group className="mb-3">
+                      <Form.Label>Company Name</Form.Label>
+                      <Form.Control
+                        name="company_name"
+                        value={formData.company_name}
+                        onChange={handleChange}
+                        required
+                      />
+                    </Form.Group>
+
+                    <Form.Group className="mb-3">
+                      <Form.Label>Industry</Form.Label>
+                      <Form.Control
+                        name="industry"
+                        value={formData.industry}
+                        onChange={handleChange}
+                        required
+                      />
+                    </Form.Group>
+
+                    <Form.Group className="mb-3">
+                      <Form.Label>Website</Form.Label>
+                      <Form.Control
+                        type="url"
+                        name="website"
+                        value={formData.website}
+                        onChange={handleChange}
+                      />
+                    </Form.Group>
+
+                    <Form.Group className="mb-3">
+                      <Form.Label>Description</Form.Label>
+                      <Form.Control
+                        as="textarea"
+                        rows={3}
+                        name="description"
+                        value={formData.description}
+                        onChange={handleChange}
+                      />
+                    </Form.Group>
+                  </>
+                )}
+
+                <div className="d-grid mt-4">
+                  <Button 
+                    variant="primary" 
+                    type="submit"
+                    disabled={isSubmitting}
+                  >
+                    {isSubmitting ? 'Registering...' : 'Register'}
+                  </Button>
                 </div>
               </Form>
 
-              {/* Link to login if user already has an account */}
               <div className="mt-3 text-center">
                 Already have an account? <a href="/login">Login here</a>
               </div>

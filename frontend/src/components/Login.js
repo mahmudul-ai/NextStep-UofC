@@ -1,120 +1,88 @@
-// Import React tools and components for layout, form, and navigation
 import React, { useState } from 'react';
 import { Container, Row, Col, Card, Form, Button, Alert } from 'react-bootstrap';
-import { useNavigate, Link } from 'react-router-dom'; // Hook for programmatic navigation
-import api from '../services/api'; // Axios instance for backend API calls
+import { useNavigate, Link } from 'react-router-dom';
+import api from '../services/api';
 
 function Login({ setToken, setUser }) {
-  // State for login form inputs and error message
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [role, setRole] = useState('student');
+  const [formData, setFormData] = useState({
+    email: '',
+    password: '',
+    user_type: 'student' // Default to student login
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  
-  const navigate = useNavigate();  // Hook to redirect user after login
+  const navigate = useNavigate();
 
-  // INTEGRATION POINT #1:
-  // Login form submission
-  // When integrating with Django, you'll need to ensure this
-  // matches the expected format for Django REST Framework's token authentication
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError('');
     
-    // Validate form
-    if (!email || !password) {
-      setError('Please enter both email and password.');
+    if (!formData.email || !formData.password) {
+      setError('Please enter both email and password');
       return;
     }
-    
+
     try {
       setLoading(true);
-      setError('');
       
-      // INTEGRATION POINT #2:
       // API call to Django backend
-      // For Django integration, ensure your backend returns:
-      // - An authentication token
-      // - User information including role/type
-      const response = await api.login({ email, password });
+      const response = await api.post('/login/', {
+        username: formData.email, // Django typically uses 'username' field
+        password: formData.password
+      });
+
+      // Handle Django REST Framework token response
+      const { token, user } = response.data;
       
-      // INTEGRATION POINT #3:
-      // Token and user information storage
-      // Adjust these based on your Django backend response format
-      // Expected format from Django might be:
-      // {
-      //   token: "your-auth-token",
-      //   user: {
-      //     id: 1,
-      //     email: "user@example.com",
-      //     username: "username",
-      //     role: "student" | "employer" | "moderator"
-      //   }
-      // }
-      
-      // Store token in localStorage
-      localStorage.setItem('accessToken', response.data.token);
-      
-      // Store user info in localStorage based on role
-      if (response.data.role === 'student') {
-        localStorage.setItem('ucid', response.data.user.ucid);
-        localStorage.setItem('userRole', 'student');
-      } else if (response.data.role === 'employer') {
-        localStorage.setItem('employerId', response.data.user.employerId);
-        localStorage.setItem('userRole', 'employer');
-      } else if (response.data.role === 'moderator') {
-        localStorage.setItem('moderatorId', response.data.user.moderatorId);
-        localStorage.setItem('userRole', 'moderator');
-      }
+      // Store authentication data
+      localStorage.setItem('accessToken', token);
+      localStorage.setItem('userData', JSON.stringify(user));
       
       // Update parent component state
-      setToken(response.data.token);
-      setUser(response.data.user);
+      setToken(token);
+      setUser(user);
       
-      // INTEGRATION POINT #4:
-      // Redirect based on user role
-      // This doesn't need to change, but ensure your Django backend
-      // provides the correct role information
-      if (response.data.role === 'student') {
-        navigate('/student-dashboard');
-      } else if (response.data.role === 'employer') {
-        navigate('/employer-dashboard');
-      } else if (response.data.role === 'moderator') {
-        navigate('/moderator-dashboard');
-      } else {
-        navigate('/');
+      // Redirect based on user type
+      switch(user.user_type) {
+        case 'student':
+          navigate('/student-dashboard');
+          break;
+        case 'employer':
+          navigate('/employer-dashboard');
+          break;
+        case 'moderator':
+          navigate('/moderator-dashboard');
+          break;
+        default:
+          navigate('/');
       }
       
     } catch (err) {
       console.error('Login error:', err);
       
-      // INTEGRATION POINT #5:
-      // Error handling for Django authentication
-      // Adjust based on your Django error response format
-      setError(err.response?.data?.message || 'Login failed. Please try again.');
+      // Handle different error response formats
+      let errorMessage = 'Login failed. Please try again.';
+      
+      if (err.response) {
+        if (err.response.data.detail) {
+          errorMessage = err.response.data.detail; // DRF default error format
+        } else if (err.response.data.non_field_errors) {
+          errorMessage = err.response.data.non_field_errors.join(' ');
+        }
+      }
+      
+      setError(errorMessage);
+    } finally {
       setLoading(false);
     }
-  };
-  
-  // Function to provide placeholder text based on selected role
-  const getEmailPlaceholder = () => {
-    switch(role) {
-      case 'student':
-        return 'student@ucalgary.ca';
-      case 'employer':
-        return 'employer@company.com';
-      case 'moderator':
-        return 'moderator@nextstep.ca';
-      default:
-        return 'Email address';
-    }
-  };
-
-  // Login credentials for testing
-  const testCredentials = {
-    student: 'john.doe@ucalgary.ca',
-    employer: 'careers@ucalgary.ca',
-    moderator: 'admin@nextstep.ca'
   };
 
   return (
@@ -132,9 +100,10 @@ function Login({ setToken, setUser }) {
                   <Form.Label>Email Address</Form.Label>
                   <Form.Control
                     type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="Enter email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleChange}
+                    placeholder="Enter your email"
                     required
                   />
                 </Form.Group>
@@ -143,14 +112,28 @@ function Login({ setToken, setUser }) {
                   <Form.Label>Password</Form.Label>
                   <Form.Control
                     type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    name="password"
+                    value={formData.password}
+                    onChange={handleChange}
                     placeholder="Enter password"
                     required
                   />
                 </Form.Group>
+
+                <Form.Group className="mb-3">
+                  <Form.Label>Login As</Form.Label>
+                  <Form.Select
+                    name="user_type"
+                    value={formData.user_type}
+                    onChange={handleChange}
+                  >
+                    <option value="student">Student</option>
+                    <option value="employer">Employer</option>
+                    <option value="moderator">Moderator</option>
+                  </Form.Select>
+                </Form.Group>
                 
-                <div className="d-grid">
+                <div className="d-grid mb-3">
                   <Button 
                     variant="primary" 
                     type="submit"
@@ -159,29 +142,62 @@ function Login({ setToken, setUser }) {
                     {loading ? 'Logging in...' : 'Login'}
                   </Button>
                 </div>
+
+                <div className="text-center">
+                  <Link to="/forgot-password">Forgot password?</Link>
+                </div>
               </Form>
               
-              <div className="mt-3 text-center">
+              <div className="mt-4 pt-3 border-top text-center">
                 <p>Don't have an account? <Link to="/register">Register here</Link></p>
               </div>
-              
-              {/* INTEGRATION POINT #6:
-                  Sample login credentials for testing
-                  Remove this in production or when connecting to real backend */}
-              <div className="mt-4 border-top pt-3">
-                <small className="text-muted d-block text-center mb-2">Sample Logins (for testing):</small>
-                <div className="d-flex justify-content-between">
-                  <small className="text-muted">
-                    <strong>Student:</strong> john.doe@ucalgary.ca / password
+
+              {/* Development/testing only - remove in production
+              {process.env.NODE_ENV === 'development' && (
+                <div className="mt-3 pt-3 border-top">
+                  <small className="text-muted d-block text-center mb-2">
+                    Test Accounts (dev only):
                   </small>
-                  <small className="text-muted">
-                    <strong>Employer:</strong> careers@ucalgary.ca / password
-                  </small>
-                  <small className="text-muted">
-                    <strong>Moderator:</strong> admin@nextstep.ca / password
-                  </small>
+                  <div className="text-center">
+                    <Button 
+                      variant="outline-secondary" 
+                      size="sm" 
+                      className="me-2 mb-2"
+                      onClick={() => setFormData({
+                        email: 'student@ucalgary.ca',
+                        password: 'testpass123',
+                        user_type: 'student'
+                      })}
+                    >
+                      Student
+                    </Button>
+                    <Button 
+                      variant="outline-secondary" 
+                      size="sm" 
+                      className="me-2 mb-2"
+                      onClick={() => setFormData({
+                        email: 'employer@company.com',
+                        password: 'testpass123',
+                        user_type: 'employer'
+                      })}
+                    >
+                      Employer
+                    </Button>
+                    <Button 
+                      variant="outline-secondary" 
+                      size="sm" 
+                      className="mb-2"
+                      onClick={() => setFormData({
+                        email: 'moderator@nextstep.ca',
+                        password: 'testpass123',
+                        user_type: 'moderator'
+                      })}
+                    >
+                      Moderator
+                    </Button>
+                  </div>
                 </div>
-              </div>
+              )} */}
             </Card.Body>
           </Card>
         </Col>
