@@ -29,7 +29,7 @@ INSTALLED_APPS = [
     # Your apps
     'accounts',
     'jobs',
-    'relay_data',
+    'api',
 ]
 
 MIDDLEWARE = [
@@ -43,7 +43,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-ROOT_URLCONF = 'storefront.urls'
+ROOT_URLCONF = 'nextstep.urls'
 
 # TEMPLATES configuration, necessary for admin and other template-based pages.
 TEMPLATES = [
@@ -62,7 +62,7 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'storefront.wsgi.application'
+WSGI_APPLICATION = 'nextstep.wsgi.application'
 
 # Database configuration, using SQLite for development
 # DATABASES = {
@@ -105,13 +105,17 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'files'
+
+
 # CORS configuration: allow the React frontend domain.
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
 ]
 
-# Use the custom user model defined in accounts
-AUTH_USER_MODEL = 'accounts.CustomUser'
+# Use the custom user model defined in api/models.py
+AUTH_USER_MODEL = 'api.CustomUser'
 
 # REST Framework configuration (you can extend this later)
 REST_FRAMEWORK = {

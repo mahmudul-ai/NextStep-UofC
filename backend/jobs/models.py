@@ -1,6 +1,6 @@
-# Importing necessary Django modules and the CustomUser model from the accounts app
+# Importing necessary Django modules and the CustomUser model from the api app
 from django.db import models
-from accounts.models import CustomUser
+from api.models import CustomUser
 
 # Job model stores data related to job postings
 class Job(models.Model):

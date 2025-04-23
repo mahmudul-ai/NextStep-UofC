@@ -1,6 +1,18 @@
-from rest_framework import viewsets
+from rest_framework import viewsets, generics
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from .models import *
 from .serializers import *
+from .permissions import IsModerator
+from rest_framework.views import APIView
+
+
+class SomeModeratorView(APIView):
+    permission_classes = [IsModerator]
+
+
+class RegistrationAPIView(generics.CreateAPIView):
+    queryset = CustomUser.objects.all()
+    serializer_class = RegisterSerializer
 
 class StudentViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Student.objects.all()
