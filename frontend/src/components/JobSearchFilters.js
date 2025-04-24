@@ -1,15 +1,12 @@
 import React, { useState } from 'react';
 import { Card, Form, Button, Row, Col } from 'react-bootstrap';
 
-function JobSearchFilters({ onApplyFilters, initialFilters = {} }) {
+function JobSearchFilters({ onApplyFilters }) {
   const [filters, setFilters] = useState({
-    keyword: initialFilters.keyword || '',
-    location: initialFilters.location || '',
-    minSalary: initialFilters.minSalary || '',
-    maxSalary: initialFilters.maxSalary || '',
-    industry: initialFilters.industry || '',
-    jobType: initialFilters.jobType || '',
-    experienceLevel: initialFilters.experienceLevel || '',
+    keyword: '',
+    location: '',
+    minSalary: '',
+    industry: '',
     showAdvanced: false
   });
 
@@ -47,18 +44,19 @@ function JobSearchFilters({ onApplyFilters, initialFilters = {} }) {
   // Submit filters to parent component
   const handleSubmit = (e) => {
     e.preventDefault();
-  
+    
+    // Create filter object excluding UI state
     const filterData = { ...filters };
     delete filterData.showAdvanced;
-  
+    
     // Remove empty values
     Object.keys(filterData).forEach(key => {
       if (!filterData[key]) {
         delete filterData[key];
       }
     });
-  
-    onApplyFilters(filterData); // pass keyword as 'keyword', not 'search'
+    
+    onApplyFilters(filterData);
   };
 
   return (

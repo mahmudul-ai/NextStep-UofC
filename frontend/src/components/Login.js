@@ -65,6 +65,16 @@ function Login({ setToken, setUser }) {
         localStorage.setItem('companyName', user.company_name);
       }
       
+      // Handle moderator role setting
+      if (user.user_type === 'moderator') {
+        console.log('User is a direct moderator');
+        // Store moderator ID if available, or use ucid as fallback
+        const moderatorId = user.moderator_id || user.ucid;
+        if (moderatorId) {
+          localStorage.setItem('moderatorId', moderatorId);
+        }
+      }
+      
       // Update user state in parent component
       setUser(user);
       
@@ -76,8 +86,10 @@ function Login({ setToken, setUser }) {
         try {
           const moderatorResponse = await api.checkModeratorStatus(user.ucid);
           if (moderatorResponse.data.isModerator) {
-            console.log('User is also a moderator:', moderatorResponse.data);
+            console.log('Student user is also a moderator:', moderatorResponse.data);
             localStorage.setItem('moderatorId', moderatorResponse.data.moderatorId);
+            // Set additional flag for dual-role users
+            localStorage.setItem('hasModeratorRole', 'true');
           }
         } catch (err) {
           console.error('Error checking moderator status:', err);

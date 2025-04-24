@@ -7,7 +7,6 @@ function JobDetails() {
   const [job, setJob] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [isSaved, setIsSaved] = useState(false);
   const [hasApplied, setHasApplied] = useState(false);
   const [applicants, setApplicants] = useState([]);
   const [loadingApplicants, setLoadingApplicants] = useState(false);
@@ -35,10 +34,6 @@ function JobDetails() {
           
           // If user is a student, check if they've saved or applied to this job
           if (isStudent && ucid) {
-            const savedJobsResponse = await api.getSavedJobs(ucid);
-            const isJobSaved = savedJobsResponse.data.some(savedJob => savedJob.job.jobId === parseInt(id));
-            setIsSaved(isJobSaved);
-            
             const applicationsResponse = await api.getStudentApplications(ucid);
             const hasStudentApplied = applicationsResponse.data.some(app => app.jobId === parseInt(id));
             setHasApplied(hasStudentApplied);
@@ -68,24 +63,19 @@ function JobDetails() {
     }
   }, [id, ucid, employerId, isStudent, isEmployer]);
   
-  // Handle saving/unsaving a job
-  const handleSaveToggle = async () => {
+  // Handle applying to a job
+  const handleApply = async () => {
     if (!isStudent || !ucid) {
       navigate('/login');
       return;
     }
     
     try {
-      if (isSaved) {
-        await api.unsaveJob(ucid, job.jobId);
-        setIsSaved(false);
-      } else {
-        await api.saveJob(ucid, job.jobId);
-        setIsSaved(true);
-      }
+      await api.applyToJob(ucid, job.jobId);
+      setHasApplied(true);
     } catch (err) {
-      console.error('Error toggling saved job status:', err);
-      alert('Failed to update saved status. Please try again.');
+      console.error('Error applying to job:', err);
+      alert('Failed to apply. Please try again.');
     }
   };
   
@@ -219,23 +209,17 @@ function JobDetails() {
               {isStudent ? (
                 <>
                   <Button 
-                    as={Link} 
-                    to={`/jobs/${job.jobId}/apply`} 
-                    variant="primary" 
-                    size="lg" 
-                    className="mb-2 w-100"
-                    disabled={isDeadlinePassed || hasApplied || job.status !== 'Active'}
+                    variant="primary"
+                    className="w-100 mb-2"
+                    onClick={handleApply}
+                    disabled={hasApplied || 
+                     isDeadlinePassed || 
+                     job.status !== 'Active'}
                   >
-                    {hasApplied ? 'Already Applied' : 
+                    <i className="bi bi-briefcase me-2"></i>
+                    {hasApplied ? 'Applied' : 
+                     isDeadlinePassed ? 'Deadline Passed' :
                      job.status !== 'Active' ? 'Not Available' : 'Apply Now'}
-                  </Button>
-                  <Button 
-                    variant={isSaved ? "outline-danger" : "outline-primary"} 
-                    onClick={handleSaveToggle}
-                    className="w-100"
-                  >
-                    <i className={`bi ${isSaved ? 'bi-bookmark-check-fill' : 'bi-bookmark'} me-2`}></i>
-                    {isSaved ? 'Unsave Job' : 'Save Job'}
                   </Button>
                 </>
               ) : isEmployer && job.employerId === parseInt(employerId) ? (

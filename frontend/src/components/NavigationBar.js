@@ -105,14 +105,13 @@ function NavigationBar({ token, user, onLogout }) {
                 {userRole === 'student' && (
                   <>
                     <Nav.Link as={NavLink} to="/application-history">My Applications</Nav.Link>
-                    <Nav.Link as={NavLink} to="/saved-jobs">Saved Jobs</Nav.Link>
                   </>
                 )}
                 
                 {userRole === 'employer' && (
                   <>
                     <Nav.Link as={NavLink} to="/manage-jobs">Manage Jobs</Nav.Link>
-                    <Nav.Link as={NavLink} to="/applications">View Applicants</Nav.Link>
+                    <Nav.Link as={NavLink} to="/company-applications">View Applicants</Nav.Link>
                   </>
                 )}
                 
