@@ -345,7 +345,7 @@ function CompanyApplications() {
             <Form.Label>Search</Form.Label>
             <Form.Control
               type="text"
-              placeholder="Search by applicant name or job title"
+              placeholder="Search by applicant name"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
