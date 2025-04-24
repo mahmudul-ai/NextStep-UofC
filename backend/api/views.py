@@ -3,15 +3,14 @@ from rest_framework.permissions import IsAuthenticatedOrReadOnly, AllowAny
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework.response import Response
 from django.contrib.auth import get_user_model
-from rest_framework import filters
-from django_filters.rest_framework import DjangoFilterBackend
+
 from .models import *
 from .serializers import *
 from .permissions import IsModerator
 from rest_framework.views import APIView
-from .filters import JobOpeningFilter
+
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-from decimal import Decimal, InvalidOperation
+
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
         # Rename 'email' to 'username' to match Django's expectations
@@ -134,20 +133,7 @@ class JobOpeningViewSet(viewsets.ModelViewSet):
     queryset = JobOpening.objects.all()
     serializer_class = JobOpeningSerializer
     permission_classes = [IsAuthenticatedOrReadOnly]
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
-    filterset_class = JobOpeningFilter
-    search_fields = ['JobTitle', 'Description']
-    def get_queryset(self):
-        queryset = super().get_queryset()
-        min_salary = self.request.query_params.get('minSalary')
 
-        if min_salary:
-            try:
-                queryset = queryset.filter(Salary__gte=Decimal(min_salary))  # or use your actual field name
-            except (ValueError, InvalidOperation):
-                pass
-
-        return queryset
 
 class JobApplicationViewSet(viewsets.ModelViewSet):
     queryset = JobApplication.objects.all()

@@ -10,8 +10,6 @@ function JobDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [alreadyApplied, setAlreadyApplied] = useState(false);
-  const [isSaved, setIsSaved] = useState(false);
-  const [savingJob, setSavingJob] = useState(false);
   const [verificationStatus, setVerificationStatus] = useState(null);
   
   const { id } = useParams();
@@ -75,10 +73,6 @@ function JobDetail() {
               );
             
             setAlreadyApplied(hasApplied);
-            
-            // Check if job is saved
-            const savedJobResponse = await api.isJobSaved(ucid, parseInt(id));
-            setIsSaved(savedJobResponse.data.isSaved);
           } catch (err) {
             console.error("Error checking application status:", err);
             // Continue without setting application status
@@ -138,29 +132,6 @@ function JobDetail() {
   
   const handleApply = () => {
     navigate(`/jobs/${id}/apply`);
-  };
-  
-  const handleSaveJob = async () => {
-    if (!ucid || userRole !== 'student') return;
-    
-    try {
-      setSavingJob(true);
-      
-      if (isSaved) {
-        // Unsave the job
-        await api.unsaveJob(ucid, parseInt(id));
-        setIsSaved(false);
-      } else {
-        // Save the job
-        await api.saveJob(ucid, parseInt(id));
-        setIsSaved(true);
-      }
-      
-      setSavingJob(false);
-    } catch (err) {
-      console.error("Error saving/unsaving job:", err);
-      setSavingJob(false);
-    }
   };
   
   // Format currency
@@ -269,63 +240,28 @@ function JobDetail() {
                 <Card.Body>
                   <h5 className="text-center mb-3">Apply for this position</h5>
                   
-                  {userRole === 'student' ? (
-                    <>
-                      {alreadyApplied ? (
-                        <Alert variant="info">
-                          You have already applied for this position.
-                        </Alert>
-                      ) : (
-                        <>
-                          {daysRemaining <= 0 ? (
-                            <Alert variant="warning">
-                              The application deadline has passed.
-                            </Alert>
-                          ) : (
-                            <div className="d-grid gap-2">
-                              <Button 
-                                variant="primary" 
-                                size="lg" 
-                                className="me-2"
-                                onClick={handleApply}
-                                disabled={!userRole || userRole !== 'student' || !canApply}
-                              >
-                                {userRole === 'student' && !canApply ? 'Verification Required' : 'Apply Now'}
-                              </Button>
-                              
-                              <Button
-                                onClick={handleSaveJob}
-                                variant={isSaved ? "outline-danger" : "outline-secondary"}
-                                disabled={savingJob}
-                              >
-                                {savingJob ? (
-                                  <Spinner 
-                                    as="span"
-                                    animation="border"
-                                    size="sm"
-                                    role="status"
-                                    aria-hidden="true"
-                                    className="me-2"
-                                  />
-                                ) : (
-                                  <i className={`bi ${isSaved ? 'bi-bookmark-fill' : 'bi-bookmark'} me-2`}></i>
-                                )}
-                                {isSaved ? 'Unsave Job' : 'Save Job'}
-                              </Button>
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </>
-                  ) : !userRole ? (
-                    <Alert variant="info">
-                      Please <Link to="/login">login</Link> to apply for this job.
-                    </Alert>
-                  ) : (
-                    <Alert variant="info">
-                      Only students can apply for jobs.
-                    </Alert>
-                  )}
+                  <div className="d-flex mt-4">
+                    {userRole === 'student' ? (
+                      <>
+                        <Button 
+                          onClick={handleApply} 
+                          variant="primary" 
+                          className="me-2"
+                          disabled={!canApply || alreadyApplied}
+                        >
+                          {alreadyApplied ? 'Already Applied' : 'Apply Now'}
+                        </Button>
+                      </>
+                    ) : userRole === 'employer' ? (
+                      <Button as={Link} to={`/manage-jobs/${jobId}`} variant="primary">
+                        Edit Job
+                      </Button>
+                    ) : (
+                      <Button as={Link} to="/login" variant="primary">
+                        Login to Apply
+                      </Button>
+                    )}
+                  </div>
                 </Card.Body>
               </Card>
             </Col>

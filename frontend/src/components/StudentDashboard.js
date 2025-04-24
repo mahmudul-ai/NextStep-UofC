@@ -4,12 +4,9 @@ import { Link, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 
 function StudentDashboard() {
-  const [savedJobs, setSavedJobs] = useState([]);
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [forumPosts, setForumPosts] = useState([]);
-  const [loadingPosts, setLoadingPosts] = useState(true);
   const [communityScore, setCommunityScore] = useState(0);
   const [postCount, setPostCount] = useState(0);
   const [verificationStatus, setVerificationStatus] = useState('');
@@ -20,15 +17,8 @@ function StudentDashboard() {
   // Additional state for moderator functionality
   const [studentVerifications, setStudentVerifications] = useState([]);
   const [employerVerifications, setEmployerVerifications] = useState([]);
-  const [pendingJobs, setPendingJobs] = useState([]);
   const [moderatorActiveTab, setModeratorActiveTab] = useState('students');
   const [loadingModeratorData, setLoadingModeratorData] = useState(false);
-  
-  // Job feedback modal state
-  const [feedbackModalVisible, setFeedbackModalVisible] = useState(false);
-  const [currentJob, setCurrentJob] = useState(null);
-  const [feedbackText, setFeedbackText] = useState('');
-  const [submittingFeedback, setSubmittingFeedback] = useState(false);
   
   const navigate = useNavigate();
   const ucid = localStorage.getItem('ucid');
@@ -66,38 +56,16 @@ function StudentDashboard() {
       } else if (moderatorResponse.data.isModerator) {
         console.warn('User is a moderator but no moderatorId was returned from the API');
       }
-    } catch (err) {
+      } catch (err) {
       console.error("Error checking user status:", err);
-    }
-  };
+      }
+    };
   
   // Fetch saved jobs and applications
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        
-        // Fetch saved jobs
-        const savedJobsResponse = await api.getSavedJobs(ucid);
-        // Map backend field names to frontend field names if needed
-        const formattedSavedJobs = savedJobsResponse.data.map(job => {
-          if (job.job) {
-            return {
-              ...job,
-              job: {
-                jobId: job.job.JobID || job.job.jobId,
-                jobTitle: job.job.JobTitle || job.job.jobTitle,
-                companyName: job.job.CompanyName || job.job.companyName,
-                location: job.job.Location || job.job.location,
-                salary: job.job.Salary || job.job.salary,
-                deadline: job.job.Deadline || job.job.deadline,
-                description: job.job.Description || job.job.description
-              }
-            };
-          }
-          return job;
-        });
-        setSavedJobs(formattedSavedJobs);
         
         // Fetch applications
         const applicationsResponse = await api.getStudentApplications(ucid);
@@ -116,18 +84,18 @@ function StudentDashboard() {
           userApplications.map(async (app) => {
             // If job details are already included, use them
             if (app.job) {
-              return {
-                applicationId: app.ApplicationID || app.applicationId,
-                status: app.Status || app.status,
-                dateApplied: app.DateApplied || app.dateApplied,
-                jobId: app.JobID || app.jobId,
+          return {
+            applicationId: app.ApplicationID || app.applicationId,
+            status: app.Status || app.status,
+            dateApplied: app.DateApplied || app.dateApplied,
+            jobId: app.JobID || app.jobId,
                 job: {
-                  jobId: app.job.JobID || app.job.jobId,
-                  jobTitle: app.job.JobTitle || app.job.jobTitle,
-                  companyName: app.job.CompanyName || app.job.companyName,
-                  location: app.job.Location || app.job.location,
-                  salary: app.job.Salary || app.job.salary,
-                  deadline: app.job.Deadline || app.job.deadline
+              jobId: app.job.JobID || app.job.jobId,
+              jobTitle: app.job.JobTitle || app.job.jobTitle,
+              companyName: app.job.CompanyName || app.job.companyName,
+              location: app.job.Location || app.job.location,
+              salary: app.job.Salary || app.job.salary,
+              deadline: app.job.Deadline || app.job.deadline
                 }
               };
             }
@@ -197,10 +165,15 @@ function StudentDashboard() {
         );
         setApplications(sortedApplications);
         
-        // Fetch community score
-        const communityScoreResponse = await api.getUserCommunityScore('student', ucid);
-        setCommunityScore(communityScoreResponse.data.score);
-        setPostCount(communityScoreResponse.data.postCount);
+        // Fetch user post stats for community score
+        const communityScoreResponse = await api.getUserPostStats(ucid);
+        console.log('User post stats for dashboard:', communityScoreResponse.data);
+        
+        // Set community score equal to post count
+        const userPostCount = communityScoreResponse.data.postCount || 0;
+        console.log(`Setting post count for user ${ucid} to ${userPostCount}`);
+        setCommunityScore(userPostCount);
+        setPostCount(userPostCount);
         
         setLoading(false);
       } catch (err) {
@@ -210,23 +183,8 @@ function StudentDashboard() {
       }
     };
     
-    // Fetch forum posts
-    const fetchForumPosts = async () => {
-      try {
-        setLoadingPosts(true);
-        const response = await api.getForumPosts();
-        // Get latest 3 posts for the dashboard
-        setForumPosts(response.data.slice(0, 3));
-        setLoadingPosts(false);
-      } catch (err) {
-        console.error("Error fetching forum posts:", err);
-        setLoadingPosts(false);
-      }
-    };
-    
     if (ucid) {
       fetchData();
-      fetchForumPosts();
     }
   }, [ucid]);
   
@@ -302,10 +260,31 @@ function StudentDashboard() {
     }
   };
   
-  // Format date display
+  // Format date display - Update to use direct string manipulation
   const formatDate = (dateString) => {
-    const options = { year: 'numeric', month: 'short', day: 'numeric' };
-    return new Date(dateString).toLocaleDateString('en-US', options);
+    if (!dateString) return 'Unknown date';
+    
+    try {
+      // Use direct string manipulation to avoid timezone issues
+      // Expected format: YYYY-MM-DD
+      const parts = dateString.split('-');
+      if (parts.length !== 3) {
+        return dateString; // Return original if not in expected format
+      }
+      
+      const year = parts[0];
+      const month = parseInt(parts[1]);
+      const day = parseInt(parts[2]);
+      
+      // Map month number to name
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const monthName = monthNames[month - 1]; // -1 because array is 0-indexed
+      
+      return `${monthName} ${day}, ${year}`;
+    } catch (error) {
+      console.error('Error formatting date:', error, dateString);
+      return dateString;
+    }
   };
   
   // Filter active applications
@@ -313,13 +292,35 @@ function StudentDashboard() {
     app.status && !['rejected', 'accepted'].includes(app.status.toLowerCase())
   ).slice(0, 3); // Only show the first 3 active applications
   
-  // Only show 3 saved jobs in the dashboard
-  const recentSavedJobs = savedJobs.slice(0, 3);
-  
   // Check if student is verified
   const isVerified = verificationStatus === 'Verified' || verificationStatus === 'verified' || isModerator;
   const isPending = !isVerified && (verificationStatus === 'Pending' || verificationStatus === 'pending');
   const isRejected = !isVerified && (verificationStatus === 'Rejected' || verificationStatus === 'rejected');
+  
+  // Handle rejecting a verification with feedback
+  const handleRejectVerification = async (type, id) => {
+    const feedback = prompt('Please provide a reason for rejecting this verification request:');
+    if (feedback === null) return; // User canceled
+    
+    try {
+      if (type === 'student') {
+        await api.updateStudentVerification(id, 'Rejected', feedback);
+        setStudentVerifications(prevVerifications => 
+          prevVerifications.filter(v => v.applicantUcid !== id)
+        );
+      } else if (type === 'employer') {
+        await api.updateEmployerVerification(id, 'Rejected', feedback);
+        setEmployerVerifications(prevVerifications => 
+          prevVerifications.filter(v => v.employerId !== id)
+        );
+      }
+      
+      alert(`${type === 'student' ? 'Student' : 'Employer'} verification request has been rejected and feedback has been sent.`);
+    } catch (err) {
+      console.error(`Error rejecting ${type} verification:`, err);
+      alert(`Failed to reject ${type} verification. Please try again.`);
+    }
+  };
   
   // Handle approving a verification
   const handleApproveVerification = async (type, id) => {
@@ -376,112 +377,6 @@ function StudentDashboard() {
       }
       
       alert(errorMessage);
-    }
-  };
-  
-  // Handle rejecting a verification
-  const handleRejectVerification = async (type, id) => {
-    try {
-      const moderatorId = localStorage.getItem('moderatorId');
-      
-      if (!moderatorId) {
-        alert("Unable to reject: Your moderator ID is missing. Please log out and log back in.");
-        return;
-      }
-      
-      console.log(`Rejecting ${type} with ID ${id} by moderator ${moderatorId}`);
-      
-      // Use the updateVerificationStatus method without feedback
-      const response = await api.updateVerificationStatus(type, id, 'Rejected');
-      console.log(`Rejection response:`, response.data);
-      
-      // Update local state - remove from pending queue since it's now rejected
-      if (type === 'student') {
-        setStudentVerifications(prevVerifications => 
-          prevVerifications.filter(v => v.applicantUcid !== id)
-        );
-      } else if (type === 'employer') {
-        setEmployerVerifications(prevVerifications => 
-          prevVerifications.filter(v => v.employerId !== id)
-        );
-      }
-      
-      alert(`${type === 'student' ? 'Student' : 'Employer'} has been rejected successfully.`);
-    } catch (err) {
-      console.error("Error rejecting verification:", err);
-      console.error("Error details:", err.response?.data || "No detailed error information available");
-      
-      let errorMessage = "Failed to reject verification. ";
-      if (err.response?.status === 400) {
-        errorMessage += "There was an issue with the data format: ";
-        // Try to get specific error details from the response
-        if (typeof err.response.data === 'string') {
-          errorMessage += err.response.data;
-        } else if (typeof err.response.data === 'object') {
-          const errorDetails = Object.entries(err.response.data)
-            .map(([key, value]) => `${key}: ${value}`)
-            .join(', ');
-          errorMessage += errorDetails || JSON.stringify(err.response.data);
-        }
-      } else if (err.response?.status === 401 || err.response?.status === 403) {
-        errorMessage += "You may not have permission to perform this action.";
-      } else if (err.response?.status === 404) {
-        errorMessage += "The verification record could not be found.";
-      } else if (err.response?.status >= 500) {
-        errorMessage += "There was a server error. Please try again later.";
-      } else {
-        errorMessage += "Please try again.";
-      }
-      
-      alert(errorMessage);
-    }
-  };
-  
-  // Open feedback modal for a job
-  const openFeedbackModal = (job) => {
-    setCurrentJob(job);
-    setFeedbackText('');
-    setFeedbackModalVisible(true);
-  };
-
-  // Submit job feedback and update status
-  const submitJobFeedback = async () => {
-    if (!currentJob || !feedbackText.trim()) return;
-    
-    setSubmittingFeedback(true);
-    
-    try {
-      await api.updateJobStatus(currentJob.jobId, 'Rejected', feedbackText);
-      
-      // Remove job from pending list
-      setPendingJobs(pendingJobs.filter(job => job.jobId !== currentJob.jobId));
-      
-      // Close modal
-      setFeedbackModalVisible(false);
-      setCurrentJob(null);
-      setFeedbackText('');
-      setSubmittingFeedback(false);
-      
-      alert(`Job has been rejected successfully. The employer will receive your feedback.`);
-    } catch (err) {
-      console.error("Error rejecting job:", err);
-      alert("Failed to reject job. Please try again.");
-      setSubmittingFeedback(false);
-    }
-  };
-
-  // Handle approving a job posting
-  const handleApproveJob = async (jobId) => {
-    try {
-      await api.updateJobStatus(jobId, 'Active');
-      
-      // Update local state
-      setPendingJobs(pendingJobs.filter(job => job.jobId !== jobId));
-      
-      alert("Job has been approved and is now active.");
-    } catch (err) {
-      console.error("Error approving job:", err);
-      alert("Failed to approve job posting. Please try again.");
     }
   };
   
@@ -560,10 +455,6 @@ function StudentDashboard() {
         const employerData = (await Promise.all(employerDataPromises)).filter(Boolean);
         setEmployerVerifications(employerData);
         
-        // Fetch pending job posts
-        const jobsResponse = await api.getPendingJobs();
-        setPendingJobs(jobsResponse.data);
-        
         setLoadingModeratorData(false);
       } catch (err) {
         console.error("Error fetching moderator data:", err);
@@ -578,7 +469,7 @@ function StudentDashboard() {
     return (
       <Container className="py-4 text-center">
         <Spinner animation="border" role="status">
-          <span className="visually-hidden">Loading...</span>
+          <span className="visually-hidden">Loading dashboard...</span>
         </Spinner>
       </Container>
     );
@@ -586,128 +477,113 @@ function StudentDashboard() {
   
   return (
     <Container className="py-4">
-      {/* Verification Status Alerts */}
-      {isModerator && (
-        <Alert variant="danger" className="mb-3">
-          <Alert.Heading>Moderator Account</Alert.Heading>
-          <p className="mb-0">
-            Welcome! As a moderator, you have full access to all NextStep features. You can apply for jobs, manage your applications, and access moderator features from the panel at the bottom of this page.
-          </p>
-        </Alert>
-      )}
-      
-      {!isModerator && isPending && (
-        <Alert variant="warning" className="mb-3">
+      {/* Verification Status Alert */}
+      {verificationStatus === 'Pending' && (
+        <Alert variant="warning" className="mb-4">
+          <div className="d-flex align-items-center">
+            <i className="bi bi-exclamation-triangle-fill me-2 fs-4"></i>
+            <div>
           <Alert.Heading>Account Verification Pending</Alert.Heading>
-          <p>
-            Your account is awaiting verification by a moderator. While verification is pending:
+              <p className="mb-0">
+                Your account is awaiting verification by a moderator. Some features may be limited until your account is verified.
           </p>
-          <ul>
-            <li>You can browse and view all job postings</li>
-            <li>You can save jobs for later application</li>
-            <li>You can view your application history</li>
-            <li>You <strong>cannot apply</strong> for jobs until verification is complete</li>
-          </ul>
-          <p className="mb-0">We'll notify you once your account has been verified.</p>
-        </Alert>
-      )}
-      
-      {!isModerator && isRejected && (
-        <Alert variant="danger" className="mb-3">
-          <Alert.Heading>Account Verification Rejected</Alert.Heading>
-          <p>
-            Your account verification was not approved. Please update your profile according to the feedback below:
-          </p>
-          <p className="mb-2"><strong>Feedback:</strong> {verificationFeedback || 'No specific feedback provided. Please ensure your profile information is complete and accurate.'}</p>
-          <p className="mb-0">You can still browse jobs and view previous applications, but you cannot apply for new positions until your account is verified.</p>
-          <div className="d-flex justify-content-end mt-2">
-            <Button as={Link} to="/profile" variant="outline-danger">
-              Update Profile
-            </Button>
+            </div>
           </div>
         </Alert>
       )}
       
-      {!isModerator && isVerified && (
-        <Alert variant="success" className="mb-3">
-          <Alert.Heading>Account Verified</Alert.Heading>
-          <p className="mb-0">
-            Your account has been verified. You have full access to all NextStep features, including applying for jobs.
-          </p>
+      {verificationStatus === 'Rejected' && (
+        <Alert variant="danger" className="mb-4">
+          <div className="d-flex align-items-center">
+            <i className="bi bi-x-circle-fill me-2 fs-4"></i>
+            <div>
+          <Alert.Heading>Account Verification Rejected</Alert.Heading>
+              <p className="mb-0">
+                Your account verification was rejected. Reason: {verificationFeedback || 'No reason provided.'}
+                Please update your profile information and contact support for assistance.
+              </p>
+            </div>
+          </div>
         </Alert>
       )}
       
+      {/* Main Dashboard */}
       <Row className="mb-4">
         <Col>
-          <h1 className="mb-0">Dashboard</h1>
-          <p className="text-muted">
-            Welcome back! Here's an overview of your job search progress.
-            <Badge 
-              bg={isModerator ? 'danger' : isVerified ? 'success' : isPending ? 'warning' : 'danger'} 
-              className="ms-2"
-            >
-              {isModerator ? 'Moderator' : isVerified ? 'Verified Account' : isPending ? 'Verification Pending' : 'Verification Required'}
-            </Badge>
-          </p>
+          <h2 className="mb-4">Student Dashboard</h2>
         </Col>
         <Col xs="auto">
-          <Button as={Link} to="/browse" variant="primary" className="me-2">
+          <div className="d-flex">
+            <Button 
+              as={Link} 
+              to="/browse" 
+              variant="primary" 
+              className="me-2">
             Browse Jobs
           </Button>
-          <Button as={Link} to="/forum" variant="outline-primary">
-            Community Forum
+            <Button 
+              as={Link} 
+              to="/application-history" 
+              variant="outline-primary">
+              My Applications
           </Button>
+          </div>
         </Col>
       </Row>
       
-      {/* Error alert */}
-      {error && <Alert variant="danger">{error}</Alert>}
-      
-      {/* Application Stats */}
+      {/* Overview Cards */}
       <Row className="mb-4">
-        <Col md={3}>
-          <Card className="text-center h-100 shadow-sm">
+        <Col lg={8}>
+          <Card className="mb-4 mb-lg-0">
+            <Card.Header className="d-flex justify-content-between align-items-center">
+              <h5 className="mb-0">Job Application Summary</h5>
+              <Button as={Link} to="/application-history" variant="link" size="sm">View History</Button>
+            </Card.Header>
             <Card.Body>
-              <h1 className="display-4">{applications.length}</h1>
-              <Card.Title>Total Applications</Card.Title>
-              <Button as={Link} to="/application-history?tab=all" variant="outline-primary" className="mt-2">
-                View All Applications
-              </Button>
+              <Row>
+                {[
+                  { status: 'Submitted', variant: 'warning' },
+                  { status: 'Under Review', variant: 'info' },
+                  { status: 'Interview', variant: 'primary' },
+                  { status: 'Offer', variant: 'success' }
+                ].map(({ status, variant }) => {
+                  const count = applications.filter(app => 
+                    app.status?.toLowerCase() === status.toLowerCase()
+                  ).length;
+                  
+                  return (
+                    <Col xs={6} md={3} key={status} className="text-center mb-3">
+                      <div className="p-3">
+                        <h3 className="mb-2">{count}</h3>
+                        <Badge 
+                          bg={variant}
+                          style={{ width: '100%', display: 'block', padding: '8px' }}
+                        >
+                          {status}
+                        </Badge>
+                </div>
+        </Col>
+                  );
+                })}
+              </Row>
             </Card.Body>
           </Card>
         </Col>
-        <Col md={3}>
-          <Card className="text-center h-100 shadow-sm">
-            <Card.Body>
-              <h1 className="display-4">{activeApplications.length}</h1>
-              <Card.Title>Active Applications</Card.Title>
-              <Button as={Link} to="/application-history?tab=active" variant="outline-primary" className="mt-2">
-                Check Status
-              </Button>
-            </Card.Body>
-          </Card>
-        </Col>
-        <Col md={3}>
-          <Card className="text-center h-100 shadow-sm">
-            <Card.Body>
-              <h1 className="display-4">{savedJobs.length}</h1>
-              <Card.Title>Saved Jobs</Card.Title>
-              <Button as={Link} to="/saved-jobs" variant="outline-primary" className="mt-2">
-                View Saved Jobs
-              </Button>
-            </Card.Body>
-          </Card>
-        </Col>
-        <Col md={3}>
-          <Card className="text-center h-100 shadow-sm bg-light">
-            <Card.Body>
-              <h1 className="display-4">{communityScore}</h1>
+        
+        <Col lg={4}>
+          <Card className="h-100">
+            <Card.Header className="d-flex justify-content-between align-items-center">
+              <h5 className="mb-0">Community Engagement</h5>
+              <Button as={Link} to="/forum" variant="link" size="sm">Visit Forum</Button>
+            </Card.Header>
+            <Card.Body className="text-center">
+              <h1 className="display-4">{postCount}</h1>
               <Card.Title className="d-flex align-items-center justify-content-center">
-                <i className="bi bi-star-fill text-warning me-2"></i>
-                Community Score
+                <i className="bi bi-chat-square-text text-success me-2"></i>
+                Posts Created
               </Card.Title>
               <p className="text-muted small">
-                From {postCount} forum {postCount === 1 ? 'post' : 'posts'}
+                Your contribution to the community forum
               </p>
               <Button as={Link} to="/forum?tab=my-posts" variant="outline-success" className="mt-2">
                 <i className="bi bi-list-ul me-2"></i>
@@ -718,266 +594,101 @@ function StudentDashboard() {
         </Col>
       </Row>
       
-      <Row>
-        <Col md={6} className="mb-4">
+      {/* Recent Jobs and Applications */}
+      <Row className="mb-4">
+        <Col>
           <Card className="h-100">
             <Card.Header className="d-flex justify-content-between align-items-center">
-              <h5 className="mb-0">Active Applications</h5>
-              <Button as={Link} to="/application-history?tab=active" variant="link" size="sm">
-                View All
-              </Button>
+              <h5 className="mb-0">Recent Applications</h5>
+              <Button as={Link} to="/application-history" variant="link" size="sm">View All</Button>
             </Card.Header>
-            {activeApplications.length === 0 ? (
-              <Card.Body>
-                <Alert variant="info">
-                  You don't have any active applications right now. Start applying for jobs!
-                </Alert>
-              </Card.Body>
-            ) : (
-              <ListGroup variant="flush">
-                {activeApplications.map((application) => (
+            <ListGroup variant="flush">
+              {applications.length > 0 ? (
+                applications.slice(0, 5).map((application) => ( // Show up to 5 applications since we have more space now
                   <ListGroup.Item key={application.applicationId}>
                     <div className="d-flex justify-content-between align-items-center">
                       <div>
-                        <h6 className="mb-1">{application.job?.jobTitle || 'Job Title Not Available'}</h6>
-                        <p className="mb-1 text-muted small">
-                          {application.job?.companyName || 'Company Not Available'} • Applied on {formatDate(application.dateApplied)}
-                        </p>
-                        <Badge bg={getStatusBadgeVariant(application.status)}>
-                          {formatStatus(application.status)}
-                        </Badge>
+                        <h6 className="mb-0">{application.job?.jobTitle}</h6>
+                        <small className="d-block">{application.job?.companyName}</small>
+                        <div>
+                          <Badge bg={getStatusBadgeVariant(application.status)} className="me-2">
+                            {formatStatus(application.status)}
+                          </Badge>
+                          <small className="text-muted">
+                            Applied: {formatDate(application.dateApplied)}
+                          </small>
+                        </div>
                       </div>
                       <Button 
                         as={Link} 
                         to={`/jobs/${application.jobId}`} 
-                        variant="outline-secondary" 
+                        variant="outline-primary" 
                         size="sm"
                       >
-                        View
+                        View Job
                       </Button>
                     </div>
                   </ListGroup.Item>
-                ))}
-              </ListGroup>
-            )}
-          </Card>
-        </Col>
-        
-        <Col md={6} className="mb-4">
-          <Card className="h-100">
-            <Card.Header className="d-flex justify-content-between align-items-center">
-              <h5 className="mb-0">Saved Jobs</h5>
-              <Button as={Link} to="/saved-jobs" variant="link" size="sm">
-                View All
-              </Button>
-            </Card.Header>
-            {recentSavedJobs.length === 0 ? (
-              <Card.Body>
-                <Alert variant="info">
-                  You haven't saved any jobs yet. Save jobs you're interested in for later!
-                </Alert>
-              </Card.Body>
-            ) : (
-              <ListGroup variant="flush">
-                {recentSavedJobs.map((savedJob) => {
-                  const job = savedJob.job || {};
-                  const daysRemaining = job.deadline ? calculateDaysRemaining(job.deadline) : 0;
-                  
-                  return (
-                    <ListGroup.Item key={savedJob.savedJobId}>
-                      <div className="d-flex justify-content-between align-items-center">
-                        <div>
-                          <h6 className="mb-1">{job.jobTitle || 'Job Title Not Available'}</h6>
-                          <p className="mb-1 text-muted small">
-                            {job.companyName || 'Company Not Available'} • {job.salary ? formatSalary(job.salary) : 'Salary Not Available'}
-                          </p>
-                          {daysRemaining > 0 ? (
-                            <Badge bg={getDeadlineBadgeVariant(daysRemaining)}>
-                              {daysRemaining} days left
-                            </Badge>
-                          ) : (
-                            <Badge bg="danger">Deadline passed</Badge>
-                          )}
-                        </div>
-                        <div>
-                          <Button 
-                            as={Link} 
-                            to={!isVerified ? "#" : `/jobs/${job.jobId}/apply`}
-                            onClick={!isVerified ? (e) => {
-                              e.preventDefault();
-                              alert("Your account needs to be verified before you can apply for jobs. Please check your verification status at the top of the dashboard.");
-                            } : undefined}
-                            variant="primary" 
-                            size="sm"
-                            className="me-2"
-                            disabled={daysRemaining <= 0 || !job.jobId}
-                            title={!isVerified ? "Verification required to apply" : ""}
-                          >
-                            Apply
-                          </Button>
-                          <Button 
-                            as={Link} 
-                            to={`/jobs/${job.jobId}`} 
-                            variant="outline-secondary" 
-                            size="sm"
-                            disabled={!job.jobId}
-                          >
-                            View
-                          </Button>
-                        </div>
-                      </div>
-                    </ListGroup.Item>
-                  );
-                })}
-              </ListGroup>
-            )}
-          </Card>
-        </Col>
-      </Row>
-      
-      {/* Forum Posts Section */}
-      <Row className="mb-4">
-        <Col>
-          <Card>
-            <Card.Header>
-              <div className="d-flex justify-content-between align-items-center">
-                <span>Recent Forum Posts</span>
-                <Button as={Link} to="/forum" variant="link" size="sm">Visit Forum</Button>
-              </div>
-            </Card.Header>
-            <Card.Body>
-              {loadingPosts ? (
-                <div className="text-center p-3">
-                  <Spinner animation="border" size="sm" />
-                </div>
-              ) : forumPosts.length > 0 ? (
-                <ListGroup variant="flush">
-                  {forumPosts.map(post => (
-                    <ListGroup.Item key={post.forumPostId} className="border-bottom py-3">
-                      <div className="d-flex">
-                        <div className="flex-grow-1">
-                          <h6 className="mb-1">
-                            <Link to={`/forum?postId=${post.forumPostId}`} style={{ textDecoration: 'none' }}>
-                              {post.title}
-                            </Link>
-                          </h6>
-                          <p className="text-muted mb-2">
-                            <small>
-                              Posted by{' '}
-                              <strong>
-                                {post.authorType === 'student' ? post.authorName : 
-                                 post.authorType === 'employer' ? post.companyName : 
-                                 'Moderator'}
-                              </strong>
-                              {' '}on {formatDate(post.datePosted)}
-                            </small>
-                            <Badge 
-                              bg={
-                                post.authorType === 'student' ? 'info' : 
-                                post.authorType === 'employer' ? 'primary' : 
-                                'danger'
-                              }
-                              className="ms-2"
-                            >
-                              {post.authorType === 'student' ? 'Student' : 
-                               post.authorType === 'employer' ? 'Employer' : 
-                               'Moderator'}
-                            </Badge>
-                          </p>
-                          <p className="mb-0" style={{ 
-                            maxWidth: '100%', 
-                            overflow: 'hidden',
-                            display: '-webkit-box',
-                            WebkitLineClamp: 2,
-                            WebkitBoxOrient: 'vertical',
-                            textOverflow: 'ellipsis'
-                          }}>
-                            {post.content}
-                          </p>
-                          <div className="mt-2">
-                            <Button 
-                              as={Link} 
-                              to={`/forum?postId=${post.forumPostId}`} 
-                              variant="outline-secondary" 
-                              size="sm"
-                            >
-                              View Post
-                            </Button>
-                            {post.authorUcid === ucid && (
-                              <Button 
-                                variant="outline-danger" 
-                                size="sm"
-                                className="ms-2"
-                                onClick={async () => {
-                                  if (window.confirm("Are you sure you want to delete this post? This action cannot be undone.")) {
-                                    try {
-                                      await api.deleteForumPost(post.forumPostId);
-                                      setForumPosts(forumPosts.filter(p => p.forumPostId !== post.forumPostId));
-                                    } catch (err) {
-                                      console.error("Error deleting post:", err);
-                                      alert("Failed to delete post. Please try again.");
-                                    }
-                                  }
-                                }}
-                              >
-                                <i className="bi bi-trash"></i>
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                        <div className="ms-2 d-flex flex-column align-items-center justify-content-center">
-                          <Badge bg="secondary" pill>
-                            <i className="bi bi-hand-thumbs-up me-1"></i>
-                            {post.upvotes}
-                          </Badge>
-                        </div>
-                      </div>
-                    </ListGroup.Item>
-                  ))}
-                </ListGroup>
+                ))
               ) : (
-                <Alert variant="info">
-                  No forum posts yet. <Link to="/forum">Create a post</Link> to start discussions with the community.
-                </Alert>
+                <div className="p-0">
+                  <div className="text-center py-5 px-3" style={{ backgroundColor: 'rgba(13, 110, 253, 0.03)' }}>
+                    <div className="mb-3">
+                      <span className="d-inline-block p-3 bg-light rounded-circle shadow-sm">
+                        <i className="bi bi-clipboard2-check text-primary" style={{ fontSize: '2.5rem' }}></i>
+                      </span>
+                    </div>
+                    <h5 className="mb-2">No Applications Yet</h5>
+                    <p className="text-muted mb-4 px-4">
+                      Apply to jobs to track your application progress
+                    </p>
+                    <Button as={Link} to="/browse" variant="primary" className="mt-2">
+                      <i className="bi bi-send me-2"></i>
+                      Apply Now
+                    </Button>
+                  </div>
+                </div>
               )}
-            </Card.Body>
-            <Card.Footer className="text-center">
-              <Button as={Link} to="/forum" variant="primary">
-                Create New Post
-              </Button>
+            </ListGroup>
+            <Card.Footer className="text-center" style={{ borderTop: applications.length > 0 ? '' : 'none' }}>
+              {applications.length > 0 && (
+                <Button as={Link} to="/browse" variant="outline-primary">
+                  <i className="bi bi-send me-2"></i>
+                  Apply for More Jobs
+                </Button>
+              )}
             </Card.Footer>
           </Card>
         </Col>
       </Row>
       
-      {/* Moderator Panel - Show only if user is a moderator */}
+      {/* Moderator Section - Keep existing styling with some updates for consistency */}
       {isModerator && (
-        <Row className="mb-4">
-          <Col>
-            <Card className="border-danger">
-              <Card.Header className="bg-danger text-white">
-                <h5 className="mb-0">Moderator Actions</h5>
-              </Card.Header>
-              <Card.Body>
+      <Row className="mb-4">
+        <Col>
+          <Card>
+            <Card.Header>
+                <h5 className="mb-0">Moderator Controls</h5>
+            </Card.Header>
+            <Card.Body>
                 {loadingModeratorData ? (
-                  <div className="text-center py-4">
+                  <div className="text-center py-3">
                     <Spinner animation="border" role="status">
-                      <span className="visually-hidden">Loading...</span>
+                      <span className="visually-hidden">Loading moderator data...</span>
                     </Spinner>
-                    <p className="mt-2">Loading verification data...</p>
-                  </div>
+                </div>
                 ) : (
                   <>
                     <Tabs
                       activeKey={moderatorActiveTab}
-                      onSelect={(k) => setModeratorActiveTab(k)}
+                      onSelect={(key) => setModeratorActiveTab(key)}
                       className="mb-3"
                     >
                       <Tab eventKey="students" title={`Student Verifications (${studentVerifications.length})`}>
                         {studentVerifications.length === 0 ? (
                           <Alert variant="info">No pending student verifications.</Alert>
                         ) : (
-                          <ListGroup variant="flush">
+                <ListGroup variant="flush">
                             {studentVerifications.map(verification => (
                               <ListGroup.Item key={verification.applicantUcid}>
                                 <div className="d-flex justify-content-between align-items-center">
@@ -990,7 +701,7 @@ function StudentDashboard() {
                                       <strong>Graduation Year:</strong> {verification.student.graduationYear || 'Not specified'}
                                     </p>
                                   </div>
-                                  <div className="d-flex">
+                      <div className="d-flex">
                                     <Button 
                                       variant="outline-success" 
                                       size="sm"
@@ -1052,121 +763,13 @@ function StudentDashboard() {
                           </ListGroup>
                         )}
                       </Tab>
-                      
-                      <Tab eventKey="jobs" title={`Pending Jobs (${pendingJobs.length})`}>
-                        {pendingJobs.length === 0 ? (
-                          <Alert variant="info">No pending job postings to review.</Alert>
-                        ) : (
-                          <ListGroup variant="flush">
-                            {pendingJobs.map(job => (
-                              <ListGroup.Item key={job.jobId}>
-                                <div className="d-flex justify-content-between">
-                                  <div>
-                                    <h5 className="mb-1">{job.jobTitle}</h5>
-                                    <p className="mb-1">
-                                      <Badge bg="primary" className="me-2">{job.companyName}</Badge>
-                                      <Badge bg="secondary" className="me-2">{job.location}</Badge>
-                                      <Badge bg="info">{formatSalary(job.salary)}</Badge>
-                                    </p>
-                                    <p className="mb-1"><strong>Deadline:</strong> {formatDate(job.deadline)}</p>
-                                    <p className="mb-0" style={{ 
-                                      maxWidth: '100%', 
-                                      overflow: 'hidden',
-                                      display: '-webkit-box',
-                                      WebkitLineClamp: 2,
-                                      WebkitBoxOrient: 'vertical',
-                                      textOverflow: 'ellipsis'
-                                    }}>
-                                      {job.description}
-                                    </p>
-                                    <div className="mt-2">
-                                      <Button 
-                                        as={Link}
-                                        to={`/jobs/${job.jobId}`}
-                                        variant="outline-info" 
-                                        size="sm"
-                                        className="me-2"
-                                      >
-                                        <i className="bi bi-eye me-1"></i>
-                                        View Details
-                                      </Button>
-                                    </div>
-                                  </div>
-                                  <div className="d-flex flex-column">
-                                    <Button 
-                                      variant="outline-success" 
-                                      size="sm"
-                                      className="mb-2"
-                                      onClick={() => handleApproveJob(job.jobId)}
-                                    >
-                                      Approve
-                                    </Button>
-                                    <Button 
-                                      variant="outline-danger" 
-                                      size="sm"
-                                      onClick={() => openFeedbackModal(job)}
-                                    >
-                                      Reject
-                                    </Button>
-                                  </div>
-                                </div>
-                              </ListGroup.Item>
-                            ))}
-                          </ListGroup>
-                        )}
-                      </Tab>
                     </Tabs>
                   </>
-                )}
-              </Card.Body>
-            </Card>
-          </Col>
-        </Row>
-      )}
-      
-      {/* Job Feedback Modal */}
-      {isModerator && (
-        <Modal show={feedbackModalVisible} onHide={() => setFeedbackModalVisible(false)}>
-          <Modal.Header closeButton>
-            <Modal.Title>
-              Reject Job Posting
-            </Modal.Title>
-          </Modal.Header>
-          <Modal.Body>
-            <p>
-              Please provide feedback to the employer about why this job posting is being rejected and what changes are needed for approval.
-            </p>
-            <Form.Group>
-              <Form.Label>Feedback</Form.Label>
-              <Form.Control 
-                as="textarea" 
-                rows={4} 
-                value={feedbackText}
-                onChange={(e) => setFeedbackText(e.target.value)}
-                placeholder="Enter your feedback here..."
-              />
-            </Form.Group>
-          </Modal.Body>
-          <Modal.Footer>
-            <Button variant="secondary" onClick={() => setFeedbackModalVisible(false)}>
-              Cancel
-            </Button>
-            <Button 
-              variant="danger" 
-              onClick={submitJobFeedback}
-              disabled={submittingFeedback || !feedbackText.trim()}
-            >
-              {submittingFeedback ? (
-                <>
-                  <Spinner animation="border" size="sm" className="me-2" />
-                  Submitting...
-                </>
-              ) : (
-                'Reject Job Posting'
               )}
-            </Button>
-          </Modal.Footer>
-        </Modal>
+            </Card.Body>
+          </Card>
+        </Col>
+      </Row>
       )}
     </Container>
   );

@@ -103,7 +103,6 @@ class JobOpening(models.Model):
     Salary = models.DecimalField(max_digits=10, decimal_places=2, db_column='Salary')
     Location = models.CharField(max_length=255, db_column='Location')
     Deadline = models.DateField(db_column='Deadline')
-    Status = models.CharField(max_length=50, db_column='Status', default='Active') # new
 
     class Meta:
         db_table = 'job_opening'

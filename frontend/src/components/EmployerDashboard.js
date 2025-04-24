@@ -9,8 +9,6 @@ function EmployerDashboard() {
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [forumPosts, setForumPosts] = useState([]);
-  const [loadingPosts, setLoadingPosts] = useState(true);
   const [verificationStatus, setVerificationStatus] = useState('');
   const [verificationFeedback, setVerificationFeedback] = useState('');
 
@@ -70,16 +68,54 @@ function EmployerDashboard() {
         // Fetch employer's job postings
         const jobsResponse = await api.getJobs({ employerId });
         
-        // Map backend field names to frontend field names
+        // Map backend field names to frontend field names with improved validation
         const formattedJobs = jobsResponse.data.map(job => {
+          // Debug logging to catch issues with job data
+          console.log('Processing job data:', {
+            jobId: job.JobID || job.jobId,
+            salary: job.Salary || job.salary,
+            deadline: job.Deadline || job.deadline
+          });
+          
+          // Parse salary safely to avoid NaN
+          const rawSalary = job.Salary || job.salary;
+          let parsedSalary = 0;
+          
+          if (rawSalary !== undefined && rawSalary !== null) {
+            // Try to parse the salary, default to 0 if it fails
+            parsedSalary = typeof rawSalary === 'string' ? 
+              parseFloat(rawSalary.replace(/[^0-9.]/g, '')) : 
+              parseFloat(rawSalary);
+            
+            // Set to 0 if parsing resulted in NaN
+            if (isNaN(parsedSalary)) {
+              console.warn(`Invalid salary value for job ${job.JobID || job.jobId}:`, rawSalary);
+              parsedSalary = 0;
+            }
+          }
+          
+          // Validate deadline
+          const rawDeadline = job.Deadline || job.deadline;
+          let validDeadline = null;
+          
+          if (rawDeadline) {
+            try {
+              // Check if it's a valid date
+              const testDate = new Date(rawDeadline);
+              validDeadline = isNaN(testDate.getTime()) ? null : rawDeadline;
+            } catch (e) {
+              console.warn(`Invalid deadline value for job ${job.JobID || job.jobId}:`, rawDeadline);
+            }
+          }
+          
           return {
             jobId: job.JobID || job.jobId,
             employerId: job.Employer || job.employerId,
             jobTitle: job.JobTitle || job.jobTitle,
             companyName: job.CompanyName || employerData.companyName,
             location: job.Location || job.location,
-            salary: job.Salary || job.salary,
-            deadline: job.Deadline || job.deadline,
+            salary: parsedSalary,
+            deadline: validDeadline,
             description: job.Description || job.description,
             status: job.Status || job.status || "Active"
           };
@@ -109,14 +145,6 @@ function EmployerDashboard() {
         
         setApplications(formattedApplications);
 
-        // Fetch community score
-        const communityScoreResponse = await api.getUserCommunityScore('employer', employerId);
-        setEmployer(prevState => ({
-          ...prevState,
-          communityScore: communityScoreResponse.data.score,
-          postCount: communityScoreResponse.data.postCount
-        }));
-
         setLoading(false);
       } catch (err) {
         console.error("Error fetching dashboard data:", err);
@@ -125,24 +153,7 @@ function EmployerDashboard() {
       }
     };
 
-    // Fetch forum posts
-    const fetchForumPosts = async () => {
-      try {
-        setLoadingPosts(true);
-        const response = await api.getForumPosts();
-        // Get latest 3 posts for the dashboard
-        setForumPosts(response.data.slice(0, 3));
-        setLoadingPosts(false);
-      } catch (err) {
-        console.error("Error fetching forum posts:", err);
-        setLoadingPosts(false);
-      }
-    };
-
-    if (employerId) {
-      fetchDashboardData();
-      fetchForumPosts();
-    }
+    fetchDashboardData();
   }, [employerId]);
 
   // Group applications by job
@@ -191,10 +202,43 @@ function EmployerDashboard() {
     }
   };
 
-  // Format date display
+  // Format date with fallback
   const formatDate = (dateString) => {
+    if (!dateString) return 'No deadline';
+    
+    try {
     const options = { year: 'numeric', month: 'short', day: 'numeric' };
-    return new Date(dateString).toLocaleDateString('en-US', options);
+      const date = new Date(dateString);
+      
+      // Check if date is valid
+      if (isNaN(date.getTime())) {
+        console.warn('Invalid date:', dateString);
+        return 'No deadline';
+      }
+      
+      return date.toLocaleDateString('en-US', options);
+    } catch (error) {
+      console.error('Error formatting date:', error, dateString);
+      return 'No deadline';
+    }
+  };
+
+  // Format salary to avoid NaN
+  const formatSalary = (salary) => {
+    if (salary === undefined || salary === null || isNaN(salary)) {
+      return '$0';
+    }
+    
+    try {
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        maximumFractionDigits: 0
+      }).format(salary);
+    } catch (error) {
+      console.error('Error formatting salary:', error, salary);
+      return '$0';
+    }
   };
 
   // Check if employer is verified
@@ -244,13 +288,6 @@ function EmployerDashboard() {
         <Col>
           <h1 className="mb-0">Employer Dashboard</h1>
           <p className="text-muted">Welcome back! Here's an overview of your job postings and applications.</p>
-          {employer?.communityScore > 0 && (
-            <Badge bg="success" className="d-inline-flex align-items-center mt-2" style={{ fontSize: '1rem', padding: '8px 12px' }}>
-              <i className="bi bi-star-fill me-2"></i>
-              Community Score: {employer?.communityScore}
-              <span className="ms-1">({employer?.postCount || 0} {employer?.postCount === 1 ? 'post' : 'posts'})</span>
-            </Badge>
-          )}
         </Col>
         <Col xs="auto">
           <Button as={Link} to="/create-job" variant="primary" className="me-2" disabled={!isVerified}>
@@ -273,7 +310,6 @@ function EmployerDashboard() {
               <Row>
                 <Col md={8}>
                   <h3>{employer?.companyName || 'Your Company'}</h3>
-                  <p>ID: {employer?.employerId}</p>
                   <div className="d-flex align-items-center">
                     <Badge 
                       bg={getStatusBadgeVariant(verificationStatus || 'Pending')} 
@@ -305,255 +341,73 @@ function EmployerDashboard() {
         </Col>
       </Row>
 
-      {/* Application Stats */}
+      {/* Overview Cards */}
       <Row className="mb-4">
-        <Col md={7}>
-          <Card>
-            <Card.Header>
-              <h5 className="mb-0">Application Statistics</h5>
-            </Card.Header>
-            <Card.Body>
-              <Row>
-                {Object.entries(applicationStatusCounts).map(([status, count]) => (
-                  <Col key={status} xs={6} md={4} className="mb-3">
-                    <div className="text-center">
-                      <h3 className="mb-2">{count}</h3>
-                      <Badge 
-                        bg={getStatusBadgeVariant(status)}
-                        style={{ width: '100%', display: 'block', padding: '8px' }}
-                      >
-                        {status}
-                      </Badge>
-                    </div>
-                  </Col>
-                ))}
-              </Row>
-            </Card.Body>
-            <Card.Footer className="text-center">
-              <Button as={Link} to="/applications" variant="link">View All Applications</Button>
-            </Card.Footer>
-          </Card>
-        </Col>
-        
-        <Col md={5}>
-          <Card className="h-100">
-            <Card.Header className="d-flex justify-content-between align-items-center">
-              <h5 className="mb-0">Community Engagement</h5>
-              <Button as={Link} to="/forum" variant="link" size="sm">Visit Forum</Button>
-            </Card.Header>
-            <Card.Body className="text-center">
-              <h1 className="display-4">{employer?.communityScore || 0}</h1>
-              <Card.Title className="d-flex align-items-center justify-content-center">
-                <i className="bi bi-star-fill text-warning me-2"></i>
-                Community Score
-              </Card.Title>
-              <p className="text-muted small">
-                From {employer?.postCount || 0} forum {employer?.postCount === 1 ? 'post' : 'posts'}
-              </p>
-              <Button as={Link} to="/forum?tab=my-posts" variant="outline-success" className="mt-2">
-                <i className="bi bi-list-ul me-2"></i>
-                View My Posts
-              </Button>
-            </Card.Body>
-          </Card>
-        </Col>
-      </Row>
-
-      {/* Job Postings and Recent Applications */}
-      <Row className="mb-4">
-        <Col md={7}>
+        <Col lg={8}>
           <Card className="h-100">
             <Card.Header className="d-flex justify-content-between align-items-center">
               <h5 className="mb-0">Active Job Postings</h5>
-              <Button as={Link} to="/manage-jobs" variant="link" size="sm">View All</Button>
+              <Button as={Link} to="/manage-jobs" variant="link" size="sm">Manage Jobs</Button>
             </Card.Header>
-            <ListGroup variant="flush">
-              {jobs.length > 0 ? (
-                jobs.slice(0, 3).map((job) => (
-                  <ListGroup.Item key={job.jobId}>
-                    <div className="d-flex justify-content-between align-items-center">
-                      <div>
-                        <h6 className="mb-0">{job.jobTitle}</h6>
-                        <small className="text-muted">Location: {job.location}</small>
-                      </div>
-                      <div>
-                        <Badge bg="info" className="me-2">
-                          {applicationCounts[job.jobId] || 0} Applications
-                        </Badge>
-                        <Button 
-                          as={Link} 
-                          to={`/manage-jobs/${job.jobId}`} 
-                          variant="outline-primary" 
-                          size="sm"
-                        >
-                          Manage
-                        </Button>
-                      </div>
-                    </div>
-                  </ListGroup.Item>
-                ))
-              ) : (
-                <ListGroup.Item>
-                  <Alert variant="info" className="mb-0">
-                    No job postings yet. Create your first job posting!
+            {jobs.filter(job => job.status === 'Active').length === 0 ? (
+              <Card.Body>
+                <Alert variant="info">
+                  You don't have any active job postings. Create a new job posting to start receiving applications.
                   </Alert>
-                </ListGroup.Item>
-              )}
-            </ListGroup>
-          </Card>
-        </Col>
-        
-        <Col md={5}>
-          <Card className="h-100">
-            <Card.Header className="d-flex justify-content-between align-items-center">
-              <h5 className="mb-0">Recently Applied</h5>
-              <Button as={Link} to="/applications" variant="link" size="sm">View All</Button>
-            </Card.Header>
-            <ListGroup variant="flush">
-              {applications.length > 0 ? (
-                applications.slice(0, 3).map((application) => (
-                  <ListGroup.Item key={application.applicationId}>
-                    <div className="d-flex justify-content-between align-items-center">
-                      <div>
-                        <h6 className="mb-0">{application.student?.name}</h6>
-                        <small className="d-block">{application.job?.jobTitle}</small>
-                        <small className="text-muted">Applied: {new Date(application.dateApplied).toLocaleDateString()}</small>
-                      </div>
-                      <Button 
-                        as={Link} 
-                        to={`/applications/${application.applicationId}`} 
-                        variant="outline-primary" 
-                        size="sm"
-                      >
-                        View
-                      </Button>
-                    </div>
-                  </ListGroup.Item>
-                ))
-              ) : (
-                <ListGroup.Item>
-                  <Alert variant="info" className="mb-0">
-                    No applications received yet.
-                  </Alert>
-                </ListGroup.Item>
-              )}
-            </ListGroup>
-          </Card>
-        </Col>
-      </Row>
-
-      {/* Forum Posts Section */}
-      <Row className="mb-4">
-        <Col>
-          <Card>
-            <Card.Header className="d-flex justify-content-between align-items-center">
-              <h5 className="mb-0">Recent Forum Posts</h5>
-              <Button as={Link} to="/forum" variant="link" size="sm">Visit Forum</Button>
-            </Card.Header>
-            <Card.Body>
-              {loadingPosts ? (
-                <div className="text-center p-3">
-                  <Spinner animation="border" size="sm" />
+                <div className="text-center mt-3">
+                  <Button as={Link} to="/create-job" variant="primary">Post a New Job</Button>
                 </div>
-              ) : forumPosts.length > 0 ? (
+              </Card.Body>
+            ) : (
+              <>
                 <ListGroup variant="flush">
-                  {forumPosts.map(post => (
-                    <ListGroup.Item key={post.forumPostId} className="border-bottom py-3">
-                      <div className="d-flex">
-                        <div className="flex-grow-1">
-                          <h6 className="mb-1">
-                            <Link to={`/forum?postId=${post.forumPostId}`} style={{ textDecoration: 'none' }}>
-                              {post.title}
-                            </Link>
-                          </h6>
-                          <p className="text-muted mb-2">
-                            <small>
-                              Posted by{' '}
-                              <strong>
-                                {post.authorType === 'student' ? post.authorName : 
-                                 post.authorType === 'employer' ? post.companyName : 
-                                 'Moderator'}
-                              </strong>
-                              {' '}on {formatDate(post.datePosted)}
-                            </small>
-                            <Badge 
-                              bg={
-                                post.authorType === 'student' ? 'info' : 
-                                post.authorType === 'employer' ? 'primary' : 
-                                'danger'
-                              }
-                              className="ms-2"
-                            >
-                              {post.authorType === 'student' ? 'Student' : 
-                               post.authorType === 'employer' ? 'Employer' : 
-                               'Moderator'}
-                            </Badge>
-                          </p>
-                          <p className="mb-0" style={{ 
-                            maxWidth: '100%', 
-                            overflow: 'hidden',
-                            display: '-webkit-box',
-                            WebkitLineClamp: 2,
-                            WebkitBoxOrient: 'vertical',
-                            textOverflow: 'ellipsis'
-                          }}>
-                            {post.content}
-                          </p>
-                          <div className="mt-2">
-                            <Button 
-                              as={Link} 
-                              to={`/forum?postId=${post.forumPostId}`} 
-                              variant="outline-secondary" 
-                              size="sm"
-                            >
-                              View Post
-                            </Button>
-                            {post.authorEmployerId === parseInt(employerId) && (
-                              <Button 
-                                variant="outline-danger" 
-                                size="sm"
-                                className="ms-2"
-                                onClick={async () => {
-                                  if (window.confirm("Are you sure you want to delete this post? This action cannot be undone.")) {
-                                    try {
-                                      await api.deleteForumPost(post.forumPostId);
-                                      setForumPosts(forumPosts.filter(p => p.forumPostId !== post.forumPostId));
-                                    } catch (err) {
-                                      console.error("Error deleting post:", err);
-                                      alert("Failed to delete post. Please try again.");
-                                    }
-                                  }
-                                }}
-                              >
-                                <i className="bi bi-trash"></i>
-                              </Button>
-                            )}
+                  {jobs.filter(job => job.status === 'Active').slice(0, 3).map(job => (
+                    <ListGroup.Item key={job.jobId}>
+                      <div className="d-flex justify-content-between align-items-start">
+                        <div>
+                          <h6 className="mb-1">{job.jobTitle}</h6>
+                          <div className="d-flex align-items-center mb-1">
+                            <Badge bg="secondary" className="me-2">{job.location}</Badge>
+                            <small className="text-muted">{formatSalary(job.salary)}</small>
                           </div>
+                          <small className="text-muted d-flex align-items-center">
+                            <i className="bi bi-calendar-event me-1"></i>
+                            Deadline: {formatDate(job.deadline)}
+                            
+                            {/* Show number of applications if any */}
+                            {getApplicationCountByJob()[job.jobId] > 0 && (
+                              <span className="ms-3 text-primary">
+                                <i className="bi bi-person-fill me-1"></i>
+                                {getApplicationCountByJob()[job.jobId]} applicant{getApplicationCountByJob()[job.jobId] !== 1 ? 's' : ''}
+                              </span>
+                            )}
+                          </small>
                         </div>
-                        <div className="ms-2 d-flex flex-column align-items-center justify-content-center">
-                          <Badge bg="secondary" pill>
-                            <i className="bi bi-hand-thumbs-up me-1"></i>
-                            {post.upvotes}
-                          </Badge>
+                        <div>
+                          <Button as={Link} to={`/jobs/${job.jobId}`} variant="outline-primary" size="sm" className="me-2">
+                            View
+                          </Button>
+                          <Button as={Link} to={`/jobs/${job.jobId}/edit`} variant="outline-secondary" size="sm">
+                            Edit
+                          </Button>
                         </div>
                       </div>
                     </ListGroup.Item>
                   ))}
                 </ListGroup>
-              ) : (
-                <Alert variant="info">
-                  No forum posts yet. <Link to="/forum">Create a post</Link> to start discussions with the community.
-                </Alert>
-              )}
-            </Card.Body>
+                {jobs.filter(job => job.status === 'Active').length > 3 && (
             <Card.Footer className="text-center">
-              <Button as={Link} to="/forum" variant="primary">
-                Create New Post
+                    <Button as={Link} to="/manage-jobs" variant="outline-primary">
+                      View All {jobs.filter(job => job.status === 'Active').length} Jobs
               </Button>
             </Card.Footer>
+                )}
+              </>
+            )}
           </Card>
         </Col>
       </Row>
+      
     </Container>
   );
 }

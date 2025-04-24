@@ -10,12 +10,11 @@ function ViewApplications() {
   
   const navigate = useNavigate();
   const ucid = localStorage.getItem('ucid');
-  const employerId = localStorage.getItem('employerId');
   const userRole = localStorage.getItem('userRole');
 
   useEffect(() => {
-    // Redirect if not logged in
-    if (!ucid && !employerId) {
+    // Redirect if not logged in as a student
+    if (!ucid || userRole !== 'student') {
       navigate('/login');
       return;
     }
@@ -23,14 +22,7 @@ function ViewApplications() {
     const fetchApplications = async () => {
       try {
         setLoading(true);
-        let response;
-        
-        // Fetch applications based on user role
-        if (userRole === 'student') {
-          response = await api.getStudentApplications(ucid);
-        } else if (userRole === 'employer') {
-          response = await api.getCompanyApplications(employerId);
-        }
+        const response = await api.getStudentApplications(ucid);
         
         if (response?.data) {
           // Format application data to handle backend field names
@@ -53,16 +45,6 @@ function ViewApplications() {
                 location: app.job.Location || app.job.location,
                 salary: app.job.Salary || app.job.salary,
                 deadline: app.job.Deadline || app.job.deadline
-              } : null,
-              // Format the student data if it exists
-              student: app.student ? {
-                ucid: app.student.UCID || app.student.ucid,
-                name: app.student.name || `${app.student.FName || ''} ${app.student.LName || ''}`.trim(),
-                firstName: app.student.FName || app.student.firstName,
-                lastName: app.student.LName || app.student.lastName,
-                email: app.student.Email || app.student.email,
-                major: app.student.Major || app.student.major,
-                graduationYear: app.student.GraduationYear || app.student.graduationYear
               } : null
             };
           });
@@ -79,7 +61,7 @@ function ViewApplications() {
     };
 
     fetchApplications();
-  }, [ucid, employerId, userRole, navigate]);
+  }, [ucid, userRole, navigate]);
 
   // Format date display
   const formatDate = (dateString) => {
@@ -133,18 +115,31 @@ function ViewApplications() {
     }
   };
   
-  // Student Application View
-  const StudentApplicationView = () => {
-    // Group applications by status for easier viewing
-    const activeApplications = applications.filter(app => 
-      !['rejected', 'accepted'].includes((app.status || '').toLowerCase())
-    );
-    
-    const completedApplications = applications.filter(app => 
-      ['rejected', 'accepted'].includes((app.status || '').toLowerCase())
-    );
-    
+  // Group applications by status for easier viewing
+  const activeApplications = applications.filter(app => 
+    !['rejected', 'accepted'].includes((app.status || '').toLowerCase())
+  );
+  
+  const completedApplications = applications.filter(app => 
+    ['rejected', 'accepted'].includes((app.status || '').toLowerCase())
+  );
+
+  if (loading) {
     return (
+      <Container className="py-4 text-center">
+        <Spinner animation="border" role="status">
+          <span className="visually-hidden">Loading applications...</span>
+        </Spinner>
+      </Container>
+    );
+  }
+
+  return (
+    <Container className="py-4">
+      <h2 className="mb-4">My Applications</h2>
+      
+      {error && <Alert variant="danger">{error}</Alert>}
+      
       <Tabs defaultActiveKey="active" id="application-tabs" className="mb-4">
         <Tab eventKey="active" title={`Active Applications (${activeApplications.length})`}>
           {activeApplications.length === 0 ? (
@@ -219,62 +214,6 @@ function ViewApplications() {
                         <small className="text-muted">
                           Applied on {formatDate(application.dateApplied)}
                         </small>
-                        {application.lastUpdated && (
-                          <small className="text-muted ms-2">
-                            • Last updated: {formatDate(application.lastUpdated)}
-                          </small>
-                        )}
-                      </div>
-                      {application.feedback && (
-                        <div className="mt-2">
-                          <strong>Feedback:</strong>
-                          <p className="mb-0 mt-1">{application.feedback}</p>
-                        </div>
-                      )}
-                    </Col>
-                    <Col md={3} className="d-flex align-items-center justify-content-end">
-                      <Button 
-                        as={Link} 
-                        to={`/jobs/${application.jobId}`} 
-                        variant="outline-primary"
-                        size="sm"
-                      >
-                        View Job
-                      </Button>
-                    </Col>
-                  </Row>
-                </ListGroup.Item>
-              ))}
-            </ListGroup>
-          )}
-        </Tab>
-        <Tab eventKey="all" title={`All Applications (${applications.length})`}>
-          {applications.length === 0 ? (
-            <Alert variant="info">
-              You haven't applied to any jobs yet.
-            </Alert>
-          ) : (
-            <ListGroup variant="flush">
-              {applications.map(application => (
-                <ListGroup.Item key={application.applicationId} className="py-3">
-                  <Row>
-                    <Col md={9}>
-                      <h5>{application.job.jobTitle}</h5>
-                      <p className="mb-1 text-muted">
-                        {application.job.companyName} • {application.job.location}
-                      </p>
-                      <div className="d-flex align-items-center mt-2">
-                        <Badge bg={getStatusBadgeVariant(application.status)} className="me-2">
-                          {formatStatus(application.status)}
-                        </Badge>
-                        <small className="text-muted">
-                          Applied on {formatDate(application.dateApplied)}
-                        </small>
-                        {application.lastUpdated && (
-                          <small className="text-muted ms-2">
-                            • Last updated: {formatDate(application.lastUpdated)}
-                          </small>
-                        )}
                       </div>
                       {application.feedback && (
                         <div className="mt-2">
@@ -300,126 +239,6 @@ function ViewApplications() {
           )}
         </Tab>
       </Tabs>
-    );
-  };
-  
-  // Employer Application View
-  const EmployerApplicationView = () => {
-    // Group applications by job for easier management
-    const jobsWithApplications = {};
-    
-    applications.forEach(app => {
-      if (!jobsWithApplications[app.job.jobId]) {
-        jobsWithApplications[app.job.jobId] = {
-          job: app.job,
-          applications: []
-        };
-      }
-      jobsWithApplications[app.job.jobId].applications.push(app);
-    });
-    
-    return (
-      <div>
-        <h4 className="mb-3">Applications by Job</h4>
-        {Object.keys(jobsWithApplications).length === 0 ? (
-          <Alert variant="info">
-            You don't have any applications for your job postings yet.
-          </Alert>
-        ) : (
-          Object.values(jobsWithApplications).map(jobData => (
-            <Card key={jobData.job.jobId} className="mb-4">
-              <Card.Header>
-                <h5 className="mb-0">{jobData.job.jobTitle}</h5>
-                <small className="text-muted">
-                  {jobData.applications.length} application(s)
-                </small>
-              </Card.Header>
-              <ListGroup variant="flush">
-                {jobData.applications.map(application => (
-                  <ListGroup.Item key={application.applicationId} className="py-3">
-                    <Row>
-                      <Col md={8}>
-                        <h6>{application.student.name}</h6>
-                        <p className="mb-1 text-muted small">
-                          {application.student.email} • {application.student.major}
-                        </p>
-                        <div className="d-flex align-items-center mt-1">
-                          <Badge bg={getStatusBadgeVariant(application.status)} className="me-2">
-                            {formatStatus(application.status)}
-                          </Badge>
-                          <small className="text-muted">
-                            Applied on {formatDate(application.dateApplied)}
-                          </small>
-                        </div>
-                      </Col>
-                      <Col md={4} className="d-flex align-items-center justify-content-end">
-                        <Button
-                          as={Link}
-                          to={`/applications/${application.applicationId}`}
-                          variant="outline-primary"
-                          size="sm"
-                          className="me-2"
-                        >
-                          Review
-                        </Button>
-                        {application.status === 'Submitted' && (
-                          <Button
-                            variant="outline-success"
-                            size="sm"
-                            onClick={() => handleUpdateStatus(application.applicationId, 'Under Review')}
-                          >
-                            Mark as Reviewing
-                          </Button>
-                        )}
-                      </Col>
-                    </Row>
-                  </ListGroup.Item>
-                ))}
-              </ListGroup>
-            </Card>
-          ))
-        )}
-      </div>
-    );
-  };
-  
-  // Function to update application status
-  const handleUpdateStatus = async (applicationId, newStatus) => {
-    try {
-      await api.updateApplicationStatus(applicationId, newStatus);
-      
-      // Update the application in local state
-      setApplications(applications.map(app => {
-        if (app.applicationId === applicationId) {
-          return { ...app, status: newStatus, lastUpdated: new Date().toISOString().split('T')[0] };
-        }
-        return app;
-      }));
-    } catch (err) {
-      console.error('Error updating application status:', err);
-      alert('Failed to update application status.');
-    }
-  };
-
-  if (loading) {
-    return (
-      <Container className="py-4 text-center">
-        <Spinner animation="border" role="status">
-          <span className="visually-hidden">Loading applications...</span>
-        </Spinner>
-      </Container>
-    );
-  }
-
-  return (
-    <Container className="py-4">
-      <h2 className="mb-4">
-        {userRole === 'student' ? 'My Applications' : 'Job Applications'}
-      </h2>
-      
-      {error && <Alert variant="danger">{error}</Alert>}
-      
-      {userRole === 'student' ? <StudentApplicationView /> : <EmployerApplicationView />}
     </Container>
   );
 }

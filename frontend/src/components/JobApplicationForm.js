@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Container, Card, Form, Button, Alert, Spinner } from 'react-bootstrap';
-import api from '../services/api';
+import apiService from '../services/api';
 
 function JobApplicationForm() {
   const { id } = useParams(); // Job ID
@@ -42,7 +42,7 @@ function JobApplicationForm() {
         }
         
         // For non-moderators, check verification status
-        const response = await api.checkVerificationStatus('student', ucid);
+        const response = await apiService.checkVerificationStatus('student', ucid);
         setVerificationStatus(response.data.status);
         setVerificationFeedback(response.data.feedback);
       } catch (err) {
@@ -62,7 +62,7 @@ function JobApplicationForm() {
         setLoading(true);
         
         // Fetch job details
-        const jobRes = await api.getJob(id);
+        const jobRes = await apiService.getJob(id);
         
         // Handle backend vs frontend format
         if (jobRes.data) {
@@ -77,7 +77,7 @@ function JobApplicationForm() {
           
           // Get student profile data
           try {
-            const studentRes = await api.getStudentProfile(ucid);
+            const studentRes = await apiService.getStudentProfile(ucid);
             if (studentRes.data) {
               setFirstName(studentRes.data.FName || studentRes.data.firstName || '');
               setLastName(studentRes.data.LName || studentRes.data.lastName || '');
@@ -124,8 +124,8 @@ function JobApplicationForm() {
       
       console.log('Submitting job application with data:', formattedData);
       
-      // Submit application to the API endpoint
-      const response = await api.post('/job-applications/', formattedData);
+      // Use the applyForJob method instead of direct API call
+      const response = await apiService.applyForJob(formattedData);
 
       setMessage('Application submitted successfully!');
       setError('');
