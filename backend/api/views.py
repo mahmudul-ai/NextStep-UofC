@@ -14,7 +14,6 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from decimal import Decimal, InvalidOperation
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
-        # Rename 'email' to 'username' to match Django's expectations
         attrs['username'] = attrs.get('email', attrs.get('username', ''))
         return super().validate(attrs)
     
@@ -23,7 +22,6 @@ class LoginView(TokenObtainPairView):
     permission_classes = [AllowAny]
 
     def post(self, request, *args, **kwargs):
-        # Ensure the request data contains 'username' field
         request.data['username'] = request.data.get('email', '')
         
         serializer = self.get_serializer(data=request.data)
@@ -45,7 +43,7 @@ class LoginView(TokenObtainPairView):
             'user_type': user.user_type,
         }
         
-        # Get profile data without using reverse relations
+        
         try:
             if user.user_type == 'student':
                 student = Student.objects.filter(Email=user.email).first()
