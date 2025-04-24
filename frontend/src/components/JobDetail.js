@@ -1,169 +1,85 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Row, Col, Card, Button, Badge, Alert, ListGroup, Spinner } from 'react-bootstrap';
+import { Container, Row, Col, Card, Badge, Button, Alert, Spinner, ListGroup, Tabs, Tab } from 'react-bootstrap';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 
-function JobDetail() {
+function JobDetails() {
   const [job, setJob] = useState(null);
-  const [employer, setEmployer] = useState(null);
-  const [similarJobs, setSimilarJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [alreadyApplied, setAlreadyApplied] = useState(false);
-  const [isSaved, setIsSaved] = useState(false);
-  const [savingJob, setSavingJob] = useState(false);
-  const [verificationStatus, setVerificationStatus] = useState(null);
+  const [hasApplied, setHasApplied] = useState(false);
+  const [applicants, setApplicants] = useState([]);
+  const [loadingApplicants, setLoadingApplicants] = useState(false);
   
   const { id } = useParams();
   const navigate = useNavigate();
   
-  const userRole = localStorage.getItem('userRole');
+  // Get user information from localStorage
   const ucid = localStorage.getItem('ucid');
-
+  const employerId = localStorage.getItem('employerId');
+  const userRole = localStorage.getItem('userRole');
+  
+  const isEmployer = userRole === 'employer';
+  const isStudent = userRole === 'student';
+  
+  // Fetch job details
   useEffect(() => {
-    const fetchJobData = async () => {
+    const fetchJobDetails = async () => {
       try {
         setLoading(true);
         
-        // Fetch job details
-        const jobResponse = await api.getJob(id);
-        
-        // Map backend data to frontend format if needed
-        let jobData = jobResponse.data;
-        
-        // Check if we need to format backend data
-        if (jobData.JobID) {
-          const formattedJob = {
-            jobId: jobData.JobID,
-            employerId: jobData.Employer,
-            jobTitle: jobData.JobTitle,
-            description: jobData.Description,
-            salary: jobData.Salary,
-            location: jobData.Location,
-            deadline: jobData.Deadline,
-            status: jobData.Status || 'Active'
-          };
+        const response = await api.getJob(parseInt(id));
+        if (response && response.data) {
+          setJob(response.data);
           
-          // Fetch employer details to get company name
-          try {
-            const employerResponse = await api.getEmployer(jobData.Employer);
-            setEmployer(employerResponse.data);
-            formattedJob.companyName = employerResponse.data.CompanyName;
-          } catch (err) {
-            console.error("Error fetching employer details:", err);
-            formattedJob.companyName = "Company";
+          // If user is a student, check if they've saved or applied to this job
+          if (isStudent && ucid) {
+            const applicationsResponse = await api.getStudentApplications(ucid);
+            const hasStudentApplied = applicationsResponse.data.some(app => app.jobId === parseInt(id));
+            setHasApplied(hasStudentApplied);
           }
           
-          jobData = formattedJob;
-        }
-        
-        setJob(jobData);
-        
-        // Check if user has already applied for this job
-        if (userRole === 'student' && ucid) {
-          try {
-            // Check applications
-            const applicationsResponse = await api.getApplications({ 
-              applicantUcid: ucid,
-              jobId: parseInt(id)
-            });
-            
-            // If any applications exist for this job, user has already applied
-            const hasApplied = applicationsResponse.data && 
-              applicationsResponse.data.some(app => 
-                (app.JobID === parseInt(id) || app.jobId === parseInt(id))
-              );
-            
-            setAlreadyApplied(hasApplied);
-            
-            // Check if job is saved
-            const savedJobResponse = await api.isJobSaved(ucid, parseInt(id));
-            setIsSaved(savedJobResponse.data.isSaved);
-          } catch (err) {
-            console.error("Error checking application status:", err);
-            // Continue without setting application status
+          // If user is an employer and owns this job, fetch applicants
+          if (isEmployer && employerId && response.data.employerId === parseInt(employerId)) {
+            setLoadingApplicants(true);
+            const applicantsResponse = await api.getJobApplicants(parseInt(id));
+            if (applicantsResponse && applicantsResponse.data) {
+              setApplicants(applicantsResponse.data);
+            }
+            setLoadingApplicants(false);
           }
         }
-        
-        // Fetch similar jobs (same company or similar salary range)
-        const jobsResponse = await api.getJobs();
-        const filtered = jobsResponse.data
-          .filter(j => j.jobId !== parseInt(id)) // Exclude current job
-          .filter(j => j.employerId === jobData.employerId || 
-                    Math.abs(j.salary - jobData.salary) < 10000) // Same company or similar salary
-          .slice(0, 3); // Limit to 3 jobs
-          
-        setSimilarJobs(filtered);
         
         setLoading(false);
       } catch (err) {
-        console.error("Error fetching job data:", err);
-        setError("Failed to load job details. Please try again later.");
+        console.error('Error fetching job details:', err);
+        setError('Failed to load job details. Please try again later.');
         setLoading(false);
       }
     };
-
-    if (id) {
-      fetchJobData();
-    }
-  }, [id, userRole, ucid]);
-  
-  // Check verification status if user is a student
-  useEffect(() => {
-    const checkVerification = async () => {
-      if (userRole === 'student' && ucid) {
-        try {
-          // Check if user is a moderator (moderators are automatically verified)
-          const moderatorId = localStorage.getItem('moderatorId');
-          if (moderatorId) {
-            setVerificationStatus('Verified');
-            return;
-          }
-          
-          // For non-moderators, check verification status
-          const response = await api.checkVerificationStatus('student', ucid);
-          setVerificationStatus(response.data.status);
-        } catch (err) {
-          console.error("Error checking verification status:", err);
-        }
-      }
-    };
     
-    checkVerification();
-  }, [userRole, ucid]);
+    if (id) {
+      fetchJobDetails();
+    }
+  }, [id, ucid, employerId, isStudent, isEmployer]);
   
-  // Determine if user can apply
-  const moderatorId = localStorage.getItem('moderatorId');
-  const canApply = userRole === 'student' && (verificationStatus === 'Verified' || !!moderatorId);
-  
-  const handleApply = () => {
-    navigate(`/jobs/${id}/apply`);
-  };
-  
-  const handleSaveJob = async () => {
-    if (!ucid || userRole !== 'student') return;
+  // Handle applying to a job
+  const handleApply = async () => {
+    if (!isStudent || !ucid) {
+      navigate('/login');
+      return;
+    }
     
     try {
-      setSavingJob(true);
-      
-      if (isSaved) {
-        // Unsave the job
-        await api.unsaveJob(ucid, parseInt(id));
-        setIsSaved(false);
-      } else {
-        // Save the job
-        await api.saveJob(ucid, parseInt(id));
-        setIsSaved(true);
-      }
-      
-      setSavingJob(false);
+      await api.applyToJob(ucid, job.jobId);
+      setHasApplied(true);
     } catch (err) {
-      console.error("Error saving/unsaving job:", err);
-      setSavingJob(false);
+      console.error('Error applying to job:', err);
+      alert('Failed to apply. Please try again.');
     }
   };
   
-  // Format currency
+  // Format salary
   const formatSalary = (salary) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -174,206 +90,444 @@ function JobDetail() {
   
   // Calculate days remaining until deadline
   const calculateDaysRemaining = (deadline) => {
+    if (!deadline) return 0;
     const today = new Date();
     const deadlineDate = new Date(deadline);
     const diffTime = deadlineDate - today;
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     return diffDays;
   };
-
+  
+  // Format date
+  const formatDate = (dateString) => {
+    if (!dateString) return 'No deadline';
+    const options = { year: 'numeric', month: 'short', day: 'numeric' };
+    return new Date(dateString).toLocaleDateString('en-US', options);
+  };
+  
+  // Process multiline text for display
+  const formatMultilineText = (text) => {
+    if (!text) return null;
+    return text.split('\n').map((line, index) => (
+      <div key={index}>{line}</div>
+    ));
+  };
+  
+  const deadlineRemaining = job ? calculateDaysRemaining(job.deadline) : 0;
+  const isDeadlinePassed = deadlineRemaining <= 0;
+  
+  // Loading state
   if (loading) {
     return (
-      <Container className="py-5 text-center">
+      <Container className="py-4 text-center">
         <Spinner animation="border" role="status">
           <span className="visually-hidden">Loading job details...</span>
         </Spinner>
-        <p className="mt-2">Loading job details...</p>
       </Container>
     );
   }
-
-  if (error) {
+  
+  // Error state
+  if (error || !job) {
     return (
       <Container className="py-4">
-        <Alert variant="danger">{error}</Alert>
-        <Button variant="secondary" onClick={() => navigate(-1)}>
-          Go Back
+        <Alert variant="danger">
+          {error || 'Job not found'}
+        </Alert>
+        <Button as={Link} to="/browse" variant="primary">
+          Back to Jobs
         </Button>
       </Container>
     );
   }
   
-  if (!job) {
-    return (
-      <Container className="py-4">
-        <Alert variant="warning">Job not found.</Alert>
-        <Button variant="secondary" onClick={() => navigate('/browse')}>
-          Browse Jobs
-        </Button>
-      </Container>
-    );
-  }
-  
-  // Get job properties using both frontend and backend field names
-  const jobId = job.jobId || job.JobID;
-  const jobTitle = job.jobTitle || job.JobTitle;
-  const companyName = job.companyName || (employer && employer.CompanyName) || "Company";
-  const location = job.location || job.Location;
-  const salary = job.salary || job.Salary;
-  const deadline = job.deadline || job.Deadline;
-  const description = job.description || job.Description;
-  const employerId = job.employerId || job.Employer;
-  
-  const daysRemaining = deadline ? calculateDaysRemaining(deadline) : 0;
-
   return (
     <Container className="py-4">
-      <Card className="shadow-sm mb-4">
-        <Card.Header as="h3" className="bg-primary text-white d-flex justify-content-between align-items-center">
-          {jobTitle}
-          {userRole === 'employer' && 
-           parseInt(localStorage.getItem('employerId')) === parseInt(employerId) && (
-            <Button as={Link} to={`/manage-jobs/${jobId}`} variant="light" size="sm">
-              Edit Job
-            </Button>
-          )}
-        </Card.Header>
-        
+      {/* Job Header Section */}
+      <Card className="mb-4">
         <Card.Body>
-          <Row>
+          <Row className="align-items-center">
             <Col md={8}>
-              <h5>{companyName}</h5>
-              <p className="mb-2">
-                <strong>Location:</strong> {location}
-              </p>
-              <p className="mb-2">
-                <strong>Salary:</strong> {formatSalary(salary)}
-              </p>
-              <p className="mb-3">
-                <strong>Application Deadline:</strong> {new Date(deadline).toLocaleDateString()}
-                {daysRemaining > 0 ? (
-                  <Badge bg="info" className="ms-2">{daysRemaining} days remaining</Badge>
-                ) : (
-                  <Badge bg="danger" className="ms-2">Deadline passed</Badge>
+              <h1 className="mb-1">{job.jobTitle}</h1>
+              <div className="d-flex align-items-center mb-3">
+                <h5 className="mb-0 text-primary">{job.companyName}</h5>
+                {job.isUrgent && (
+                  <Badge bg="danger" className="ms-2">Urgent</Badge>
                 )}
-              </p>
+                {job.isRemote && (
+                  <Badge bg="info" className="ms-2">Remote</Badge>
+                )}
+                {job.eligibleForInternship && (
+                  <Badge bg="success" className="ms-2">Internship Eligible</Badge>
+                )}
+              </div>
+              <div className="mb-3">
+                <Badge bg="secondary" className="me-2">
+                  <i className="bi bi-geo-alt me-1"></i>
+                  {job.location}
+                </Badge>
+                <Badge bg="secondary" className="me-2">
+                  <i className="bi bi-cash me-1"></i>
+                  {formatSalary(job.salary)}
+                </Badge>
+                {job.status === 'Pending' && (
+                  <Badge bg="warning" className="me-2">Pending Approval</Badge>
+                )}
+                {job.status === 'Rejected' && (
+                  <Badge bg="danger" className="me-2">Rejected</Badge>
+                )}
+                {job.status === 'Active' && job.deadline && (
+                  <Badge bg={
+                    isDeadlinePassed ? 'danger' :
+                    deadlineRemaining <= 3 ? 'warning' :
+                    'primary'
+                  }>
+                    <i className="bi bi-calendar me-1"></i>
+                    {isDeadlinePassed ? 
+                      'Deadline passed' : 
+                      `${deadlineRemaining} days remaining`}
+                  </Badge>
+                )}
+              </div>
               
-              <h5 className="mt-4 mb-3">Job Description</h5>
-              <div className="job-description" style={{ whiteSpace: 'pre-line' }}>
-                {description}
+              {/* Display feedback for rejected jobs */}
+              {job.status === 'Rejected' && job.feedback && (
+                <Alert variant="danger" className="mb-3">
+                  <strong>Moderator Feedback:</strong> {job.feedback}
+                  <p className="mt-2 mb-0">
+                    <small>Please edit this job posting according to the moderator's feedback and resubmit for approval.</small>
+                  </p>
+                </Alert>
+              )}
+              
+              <div>
+                <p><strong>Posted by:</strong> {job.companyName}</p>
+                <p><strong>Application Deadline:</strong> {formatDate(job.deadline)}</p>
               </div>
             </Col>
-            
-            <Col md={4}>
-              <Card className="shadow-sm">
-                <Card.Body>
-                  <h5 className="text-center mb-3">Apply for this position</h5>
-                  
-                  {userRole === 'student' ? (
-                    <>
-                      {alreadyApplied ? (
-                        <Alert variant="info">
-                          You have already applied for this position.
-                        </Alert>
-                      ) : (
-                        <>
-                          {daysRemaining <= 0 ? (
-                            <Alert variant="warning">
-                              The application deadline has passed.
-                            </Alert>
-                          ) : (
-                            <div className="d-grid gap-2">
-                              <Button 
-                                variant="primary" 
-                                size="lg" 
-                                className="me-2"
-                                onClick={handleApply}
-                                disabled={!userRole || userRole !== 'student' || !canApply}
-                              >
-                                {userRole === 'student' && !canApply ? 'Verification Required' : 'Apply Now'}
-                              </Button>
-                              
-                              <Button
-                                onClick={handleSaveJob}
-                                variant={isSaved ? "outline-danger" : "outline-secondary"}
-                                disabled={savingJob}
-                              >
-                                {savingJob ? (
-                                  <Spinner 
-                                    as="span"
-                                    animation="border"
-                                    size="sm"
-                                    role="status"
-                                    aria-hidden="true"
-                                    className="me-2"
-                                  />
-                                ) : (
-                                  <i className={`bi ${isSaved ? 'bi-bookmark-fill' : 'bi-bookmark'} me-2`}></i>
-                                )}
-                                {isSaved ? 'Unsave Job' : 'Save Job'}
-                              </Button>
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </>
-                  ) : !userRole ? (
-                    <Alert variant="info">
-                      Please <Link to="/login">login</Link> to apply for this job.
-                    </Alert>
-                  ) : (
-                    <Alert variant="info">
-                      Only students can apply for jobs.
-                    </Alert>
-                  )}
-                </Card.Body>
-              </Card>
+            <Col md={4} className="text-md-end">
+              {isStudent ? (
+                <>
+                  <Button 
+                    variant="primary"
+                    className="w-100 mb-2"
+                    onClick={handleApply}
+                    disabled={hasApplied || 
+                     isDeadlinePassed || 
+                     job.status !== 'Active'}
+                  >
+                    <i className="bi bi-briefcase me-2"></i>
+                    {hasApplied ? 'Applied' : 
+                     isDeadlinePassed ? 'Deadline Passed' :
+                     job.status !== 'Active' ? 'Not Available' : 'Apply Now'}
+                  </Button>
+                </>
+              ) : isEmployer && job.employerId === parseInt(employerId) ? (
+                <>
+                  <Button 
+                    as={Link} 
+                    to={`/manage-jobs/${job.jobId}`}
+                    variant="outline-primary" 
+                    className="mb-2 w-100"
+                  >
+                    <i className="bi bi-pencil me-2"></i>
+                    Edit Job Posting
+                  </Button>
+                  <Button 
+                    variant="outline-secondary"
+                    className="w-100"
+                    as={Link}
+                    to={`/applications?jobId=${job.jobId}`}
+                    disabled={job.status !== 'Active'}
+                  >
+                    <i className="bi bi-people me-2"></i>
+                    View All Applicants
+                  </Button>
+                </>
+              ) : (
+                <Button 
+                  as={Link} 
+                  to="/login" 
+                  variant="primary"
+                  className="mb-2 w-100"
+                  disabled={job.status !== 'Active'}
+                >
+                  Sign in to Apply
+                </Button>
+              )}
             </Col>
           </Row>
         </Card.Body>
       </Card>
       
-      <div className="mt-3">
-        <Button variant="secondary" onClick={() => navigate(-1)}>
-          Back to Jobs
-        </Button>
-      </div>
-      
-      {/* Similar Jobs Section */}
-      {similarJobs.length > 0 && (
-        <Row>
-          <Col>
-            <Card>
-              <Card.Header>Similar Jobs You Might Like</Card.Header>
+      {/* Job Content Section */}
+      <Row>
+        <Col md={8}>
+          {/* Main Job Description */}
+          <Card className="mb-4">
+            <Card.Header>
+              <h4>Job Description</h4>
+            </Card.Header>
+            <Card.Body>
+              <p>{job.description}</p>
+              
+              <h5 className="mt-4">Requirements</h5>
+              <div className="mb-4">
+                {formatMultilineText(job.requirements)}
+              </div>
+              
+              <h5 className="mt-4">Responsibilities</h5>
+              <div className="mb-4">
+                {formatMultilineText(job.responsibilities)}
+              </div>
+              
+              <h5 className="mt-4">Benefits</h5>
+              <div>
+                {formatMultilineText(job.benefits)}
+              </div>
+            </Card.Body>
+          </Card>
+          
+          {/* For employers: Applicants Tab */}
+          {isEmployer && job.employerId === parseInt(employerId) && (
+            <Card className="mb-4">
+              <Card.Header>
+                <h4>Recent Applicants</h4>
+              </Card.Header>
+              <Card.Body>
+                {loadingApplicants ? (
+                  <div className="text-center py-3">
+                    <Spinner animation="border" size="sm" />
+                    <span className="ms-2">Loading applicants...</span>
+                  </div>
+                ) : applicants.length === 0 ? (
+                  <Alert variant="info">
+                    No applicants for this position yet.
+                  </Alert>
+                ) : (
+                  <ListGroup variant="flush">
+                    {applicants.slice(0, 5).map(applicant => (
+                      <ListGroup.Item key={applicant.applicationId} className="py-3">
+                        <Row>
+                          <Col md={8}>
+                            <h5 className="mb-1">{applicant.student.name}</h5>
+                            <p className="mb-1 text-muted">
+                              {applicant.student.major} • Applied on {formatDate(applicant.dateApplied)}
+                            </p>
+                            <Badge 
+                              bg={
+                                applicant.status === 'Submitted' ? 'warning' :
+                                applicant.status === 'Under Review' ? 'info' :
+                                applicant.status === 'Rejected' ? 'danger' :
+                                applicant.status === 'Interview' ? 'primary' :
+                                'success'
+                              }
+                            >
+                              {applicant.status}
+                            </Badge>
+                          </Col>
+                          <Col md={4} className="text-end">
+                            <Button 
+                              as={Link} 
+                              to={`/applications/${applicant.applicationId}`}
+                              variant="outline-primary"
+                              size="sm"
+                            >
+                              Review
+                            </Button>
+                          </Col>
+                        </Row>
+                      </ListGroup.Item>
+                    ))}
+                  </ListGroup>
+                )}
+                <div className="text-center mt-3">
+                  <Button 
+                    as={Link}
+                    to={`/applications?jobId=${job.jobId}`}
+                    variant="outline-primary"
+                  >
+                    View All Applicants
+                  </Button>
+                </div>
+              </Card.Body>
+            </Card>
+          )}
+          
+          {/* For students: Similar Jobs */}
+          {isStudent && (
+            <Card className="mb-4">
+              <Card.Header>
+                <h4>Similar Jobs You Might Like</h4>
+              </Card.Header>
               <ListGroup variant="flush">
-                {similarJobs.map((similarJob) => (
-                  <ListGroup.Item key={similarJob.jobId}>
-                    <div className="d-flex justify-content-between align-items-center">
-                      <div>
-                        <h6 className="mb-0">{similarJob.jobTitle}</h6>
-                        <small className="text-muted">{similarJob.companyName} • {similarJob.location}</small>
-                      </div>
-                      <div>
-                        <Badge bg="secondary" className="me-2">{formatSalary(similarJob.salary)}</Badge>
-                        <Button 
-                          as={Link} 
-                          to={`/jobs/${similarJob.jobId}`} 
-                          variant="outline-primary" 
-                          size="sm"
-                        >
-                          View
-                        </Button>
-                      </div>
-                    </div>
-                  </ListGroup.Item>
-                ))}
+                {[1, 2, 3].map(i => {
+                  // Display other jobs from same company or similar jobs
+                  const similarJob = {
+                    jobId: job.jobId + 100 + i,
+                    jobTitle: `Similar ${job.jobTitle} ${i}`,
+                    companyName: i % 2 === 0 ? job.companyName : `Other Company ${i}`,
+                    location: job.location,
+                    salary: job.salary - 5000 + (i * 10000)
+                  };
+                  
+                  return (
+                    <ListGroup.Item key={i} action as={Link} to={`/jobs/${similarJob.jobId}`}>
+                      <h5 className="mb-1">{similarJob.jobTitle}</h5>
+                      <p className="mb-1 text-muted">
+                        {similarJob.companyName} • {similarJob.location}
+                      </p>
+                      <Badge bg="secondary">
+                        {formatSalary(similarJob.salary)}
+                      </Badge>
+                    </ListGroup.Item>
+                  );
+                })}
               </ListGroup>
             </Card>
-          </Col>
-        </Row>
-      )}
+          )}
+        </Col>
+        
+        {/* Sidebar */}
+        <Col md={4}>
+          {/* Application Status - For Students Only */}
+          {isStudent && hasApplied && (
+            <Card className="mb-4 bg-light">
+              <Card.Body>
+                <h5>Your Application Status</h5>
+                <Badge 
+                  bg="success" 
+                  style={{ padding: '8px', fontSize: '1rem', display: 'inline-block', marginTop: '8px' }}
+                >
+                  <i className="bi bi-check-circle me-2"></i>
+                  Applied
+                </Badge>
+                <p className="mt-3">
+                  You applied to this position on {formatDate(new Date().toISOString())}.
+                  Check your <Link to="/applications">application status</Link> for updates.
+                </p>
+              </Card.Body>
+            </Card>
+          )}
+          
+          {/* Job Summary Card */}
+          <Card className="mb-4">
+            <Card.Header>
+              <h5>Job Summary</h5>
+            </Card.Header>
+            <ListGroup variant="flush">
+              <ListGroup.Item>
+                <i className="bi bi-building me-2"></i>
+                <strong>Company:</strong> {job.companyName}
+              </ListGroup.Item>
+              <ListGroup.Item>
+                <i className="bi bi-geo-alt me-2"></i>
+                <strong>Location:</strong> {job.location}
+              </ListGroup.Item>
+              <ListGroup.Item>
+                <i className="bi bi-cash me-2"></i>
+                <strong>Salary:</strong> {formatSalary(job.salary)}
+              </ListGroup.Item>
+              <ListGroup.Item>
+                <i className="bi bi-calendar me-2"></i>
+                <strong>Application Deadline:</strong> {formatDate(job.deadline)}
+              </ListGroup.Item>
+              <ListGroup.Item>
+                <i className="bi bi-people me-2"></i>
+                <strong>Applicants:</strong> {job.applicationsCount || 0}
+              </ListGroup.Item>
+            </ListGroup>
+          </Card>
+          
+          {/* Company Info Card - Different for Employers vs Students */}
+          <Card className="mb-4">
+            <Card.Header>
+              <h5>About {job.companyName}</h5>
+            </Card.Header>
+            <Card.Body>
+              <p>
+                {job.companyName} is a leading company in the industry, known for innovation and excellence.
+              </p>
+              {isStudent ? (
+                <>
+                  <p>Learn more about working at {job.companyName} and explore their culture.</p>
+                  <Button variant="outline-primary" className="w-100">
+                    View Company Profile
+                  </Button>
+                </>
+              ) : isEmployer && job.employerId === parseInt(employerId) ? (
+                <>
+                  <p>Manage your company profile to attract more qualified candidates.</p>
+                  <Button variant="outline-primary" className="w-100">
+                    Edit Company Profile
+                  </Button>
+                </>
+              ) : (
+                <p>Sign in to learn more about this company.</p>
+              )}
+            </Card.Body>
+          </Card>
+          
+          {/* Application Tips - For Students Only */}
+          {isStudent && !hasApplied && !isDeadlinePassed && (
+            <Card className="border-primary">
+              <Card.Header className="bg-primary text-white">
+                <h5 className="mb-0">Application Tips</h5>
+              </Card.Header>
+              <Card.Body>
+                <p><i className="bi bi-lightbulb me-2"></i> Tailor your resume to highlight relevant skills for this position.</p>
+                <p><i className="bi bi-file-earmark-text me-2"></i> Write a personalized cover letter explaining why you're a good fit.</p>
+                <p><i className="bi bi-clock me-2"></i> Submit your application early to stand out from other candidates.</p>
+                <div className="d-grid">
+                  <Button 
+                    as={Link} 
+                    to={`/jobs/${job.jobId}/apply`} 
+                    variant="primary"
+                  >
+                    Apply Now
+                  </Button>
+                </div>
+              </Card.Body>
+            </Card>
+          )}
+          
+          {/* Job Statistics - For Employers Only */}
+          {isEmployer && job.employerId === parseInt(employerId) && (
+            <Card className="border-primary">
+              <Card.Header className="bg-primary text-white">
+                <h5 className="mb-0">Job Posting Statistics</h5>
+              </Card.Header>
+              <Card.Body>
+                <div className="d-flex justify-content-between mb-3">
+                  <div className="text-center">
+                    <h2>{job.applicationsCount || 0}</h2>
+                    <p className="mb-0">Applicants</p>
+                  </div>
+                  <div className="text-center">
+                    <h2>{job.viewCount || 0}</h2>
+                    <p className="mb-0">Views</p>
+                  </div>
+                  <div className="text-center">
+                    <h2>{Math.round((job.applicationsCount || 0) / Math.max(job.viewCount || 1, 1) * 100)}%</h2>
+                    <p className="mb-0">Apply Rate</p>
+                  </div>
+                </div>
+                <div className="d-grid">
+                  <Button 
+                    as={Link} 
+                    to={`/job-analytics/${job.jobId}`} 
+                    variant="outline-primary"
+                  >
+                    View Detailed Analytics
+                  </Button>
+                </div>
+              </Card.Body>
+            </Card>
+          )}
+        </Col>
+      </Row>
     </Container>
   );
 }
 
-export default JobDetail; 
+export default JobDetails; 

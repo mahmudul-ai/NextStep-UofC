@@ -31,13 +31,22 @@ function ManageJobs({ isNew }) {
 
   const employerId = parseInt(localStorage.getItem('employerId'));
 
-  // Format salary with commas and currency symbol
+  // Format salary with commas and currency symbol with improved validation
   const formatSalary = (salary) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      maximumFractionDigits: 0
-    }).format(salary);
+    if (salary === undefined || salary === null || isNaN(salary)) {
+      return '$0';
+    }
+    
+    try {
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        maximumFractionDigits: 0
+      }).format(salary);
+    } catch (error) {
+      console.error('Error formatting salary:', error, salary);
+      return '$0';
+    }
   };
 
   // Check verification status
@@ -63,7 +72,15 @@ function ManageJobs({ isNew }) {
       try {
         setLoading(true);
         
-        console.log('Fetching jobs for employer:', employerId);
+        // Ensure we have a valid employer ID
+        if (!employerId) {
+          console.error('No employer ID found in localStorage');
+          setError('Your employer account information could not be found. Please log in again.');
+          setLoading(false);
+          return;
+        }
+        
+        console.log('Fetching jobs for employer ID:', employerId);
         
         // Get company jobs - don't filter by status to get ALL jobs
         const response = await api.getCompanyJobs(employerId);
@@ -71,16 +88,54 @@ function ManageJobs({ isNew }) {
         if (response && response.data) {
           console.log('Fetched jobs:', response.data);
           
-          // Ensure consistent job status field and format
+          // Ensure consistent job status field and format with improved validation
           const formattedJobs = response.data.map(job => {
+            // Debug logging for troubleshooting
+            console.log('Processing job data:', {
+              jobId: job.JobID || job.jobId,
+              salary: job.Salary || job.salary,
+              deadline: job.Deadline || job.deadline
+            });
+            
+            // Parse salary safely to avoid NaN
+            const rawSalary = job.Salary || job.salary;
+            let parsedSalary = 0;
+            
+            if (rawSalary !== undefined && rawSalary !== null) {
+              // Try to parse the salary, default to 0 if it fails
+              parsedSalary = typeof rawSalary === 'string' ? 
+                parseFloat(rawSalary.replace(/[^0-9.]/g, '')) : 
+                parseFloat(rawSalary);
+              
+              // Set to 0 if parsing resulted in NaN
+              if (isNaN(parsedSalary)) {
+                console.warn(`Invalid salary value for job ${job.JobID || job.jobId}:`, rawSalary);
+                parsedSalary = 0;
+              }
+            }
+            
+            // Validate deadline
+            const rawDeadline = job.Deadline || job.deadline;
+            let validDeadline = null;
+            
+            if (rawDeadline) {
+              try {
+                // Check if it's a valid date
+                const testDate = new Date(rawDeadline);
+                validDeadline = isNaN(testDate.getTime()) ? null : rawDeadline;
+              } catch (e) {
+                console.warn(`Invalid deadline value for job ${job.JobID || job.jobId}:`, rawDeadline);
+              }
+            }
+            
             const formattedJob = {
               jobId: job.JobID || job.jobId,
               employerId: job.Employer || job.employerId,
               jobTitle: job.JobTitle || job.jobTitle,
               description: job.Description || job.description,
               location: job.Location || job.location,
-              salary: job.Salary || job.salary,
-              deadline: job.Deadline || job.deadline,
+              salary: parsedSalary,
+              deadline: validDeadline,
               requirements: job.Requirements || job.requirements,
               responsibilities: job.Responsibilities || job.responsibilities,
               benefits: job.Benefits || job.benefits,
@@ -99,12 +154,27 @@ function ManageJobs({ isNew }) {
             return formattedJob;
           });
           
-          console.log('Formatted jobs:', formattedJobs);
-          setJobs(formattedJobs);
+          console.log('Formatted jobs for display:', formattedJobs);
+          
+          // Double-check that all jobs belong to this employer
+          const filteredJobs = formattedJobs.filter(job => {
+            const jobEmployerId = parseInt(job.employerId);
+            const isOwner = jobEmployerId === employerId;
+            if (!isOwner) {
+              console.warn(`Job ${job.jobId} has employerId ${jobEmployerId} which doesn't match current employer ${employerId}`);
+            }
+            return isOwner;
+          });
+          
+          if (filteredJobs.length !== formattedJobs.length) {
+            console.warn(`Filtered out ${formattedJobs.length - filteredJobs.length} jobs that didn't belong to this employer`);
+          }
+          
+          setJobs(filteredJobs);
           
           // If a job ID is specified in the URL, load that job for editing
           if (id) {
-            const jobToEdit = formattedJobs.find(job => job.jobId === parseInt(id));
+            const jobToEdit = filteredJobs.find(job => job.jobId === parseInt(id));
             if (jobToEdit) {
               setSelectedJob(jobToEdit);
               setJobFormData({
@@ -164,11 +234,20 @@ function ManageJobs({ isNew }) {
     setLoading(true);
     
     try {
+      // Validate and parse salary
+      let parsedSalary;
+      try {
+        parsedSalary = parseInt(jobFormData.salary);
+        if (isNaN(parsedSalary)) parsedSalary = 0;
+      } catch (err) {
+        parsedSalary = 0;
+      }
+      
       const payload = {
         ...jobFormData,
         employerId,
-        salary: parseInt(jobFormData.salary) || 0,
-        status: 'Pending'
+        salary: parsedSalary,
+        status: 'Active'
       };
       
       if (selectedJob) {
@@ -178,14 +257,64 @@ function ManageJobs({ isNew }) {
       } else {
         // Create new job
         const response = await api.createJob(payload);
-        setMessage('Job posting created successfully and is pending approval.');
+        setMessage('Job posting created successfully.');
         // Redirect to the job's detail page
         navigate(`/manage-jobs/${response.data.jobId}`);
       }
       
       // Refresh job list
       const response = await api.getCompanyJobs(employerId);
-      setJobs(response.data);
+      
+      // Process the response with the same validation as in fetchEmployerJobs
+      const formattedJobs = response.data.map(job => {
+        // Parse salary safely to avoid NaN
+        const rawSalary = job.Salary || job.salary;
+        let parsedSalary = 0;
+        
+        if (rawSalary !== undefined && rawSalary !== null) {
+          // Try to parse the salary, default to 0 if it fails
+          parsedSalary = typeof rawSalary === 'string' ? 
+            parseFloat(rawSalary.replace(/[^0-9.]/g, '')) : 
+            parseFloat(rawSalary);
+          
+          // Set to 0 if parsing resulted in NaN
+          if (isNaN(parsedSalary)) {
+            console.warn(`Invalid salary value for job ${job.JobID || job.jobId}:`, rawSalary);
+            parsedSalary = 0;
+          }
+        }
+        
+        // Validate deadline
+        const rawDeadline = job.Deadline || job.deadline;
+        let validDeadline = null;
+        
+        if (rawDeadline) {
+          try {
+            // Check if it's a valid date
+            const testDate = new Date(rawDeadline);
+            validDeadline = isNaN(testDate.getTime()) ? null : rawDeadline;
+          } catch (e) {
+            console.warn(`Invalid deadline value for job ${job.JobID || job.jobId}:`, rawDeadline);
+          }
+        }
+        
+        return {
+          jobId: job.JobID || job.jobId,
+          employerId: job.Employer || job.employerId,
+          jobTitle: job.JobTitle || job.jobTitle,
+          description: job.Description || job.description,
+          location: job.Location || job.location,
+          salary: parsedSalary,
+          deadline: validDeadline,
+          requirements: job.Requirements || job.requirements,
+          responsibilities: job.Responsibilities || job.responsibilities,
+          benefits: job.Benefits || job.benefits,
+          feedback: job.feedback || job.Feedback || '',
+          status: job.Status || job.status || 'Pending'
+        };
+      });
+      
+      setJobs(formattedJobs);
       
       setEditMode(false);
       setError('');
@@ -206,7 +335,57 @@ function ManageJobs({ isNew }) {
         
         // Refresh job list
         const response = await api.getCompanyJobs(employerId);
-        setJobs(response.data);
+        
+        // Process the response with the same validation as in fetchEmployerJobs
+        const formattedJobs = response.data.map(job => {
+          // Parse salary safely to avoid NaN
+          const rawSalary = job.Salary || job.salary;
+          let parsedSalary = 0;
+          
+          if (rawSalary !== undefined && rawSalary !== null) {
+            // Try to parse the salary, default to 0 if it fails
+            parsedSalary = typeof rawSalary === 'string' ? 
+              parseFloat(rawSalary.replace(/[^0-9.]/g, '')) : 
+              parseFloat(rawSalary);
+            
+            // Set to 0 if parsing resulted in NaN
+            if (isNaN(parsedSalary)) {
+              console.warn(`Invalid salary value for job ${job.JobID || job.jobId}:`, rawSalary);
+              parsedSalary = 0;
+            }
+          }
+          
+          // Validate deadline
+          const rawDeadline = job.Deadline || job.deadline;
+          let validDeadline = null;
+          
+          if (rawDeadline) {
+            try {
+              // Check if it's a valid date
+              const testDate = new Date(rawDeadline);
+              validDeadline = isNaN(testDate.getTime()) ? null : rawDeadline;
+            } catch (e) {
+              console.warn(`Invalid deadline value for job ${job.JobID || job.jobId}:`, rawDeadline);
+            }
+          }
+          
+          return {
+            jobId: job.JobID || job.jobId,
+            employerId: job.Employer || job.employerId,
+            jobTitle: job.JobTitle || job.jobTitle,
+            description: job.Description || job.description,
+            location: job.Location || job.location,
+            salary: parsedSalary,
+            deadline: validDeadline,
+            requirements: job.Requirements || job.requirements,
+            responsibilities: job.Responsibilities || job.responsibilities,
+            benefits: job.Benefits || job.benefits,
+            feedback: job.feedback || job.Feedback || '',
+            status: job.Status || job.status || 'Pending'
+          };
+        });
+        
+        setJobs(formattedJobs);
         
         setMessage('Job posting deleted successfully.');
         setError('');
@@ -221,6 +400,42 @@ function ManageJobs({ isNew }) {
       } catch (err) {
         console.error('Error deleting job:', err);
         setError('Failed to delete job posting.');
+        setLoading(false);
+      }
+    }
+  };
+
+  // Handler to close a job
+  const handleCloseJob = async (jobId) => {
+    if (window.confirm('Are you sure you want to close this job posting? This will remove it from active job searches.')) {
+      try {
+        setLoading(true);
+        
+        // Get the job to update
+        const jobToClose = jobs.find(job => job.jobId === jobId);
+        if (!jobToClose) {
+          throw new Error('Job not found');
+        }
+        
+        // Update with closed status
+        const payload = {
+          ...jobToClose,
+          employerId,
+          status: 'Closed'
+        };
+        
+        await api.updateJob(jobId, payload);
+        
+        // Refresh job list
+        const response = await api.getCompanyJobs(employerId);
+        setJobs(response.data);
+        
+        setMessage('Job posting closed successfully.');
+        setError('');
+        setLoading(false);
+      } catch (err) {
+        console.error('Error closing job:', err);
+        setError('Failed to close job posting.');
         setLoading(false);
       }
     }
@@ -251,11 +466,25 @@ function ManageJobs({ isNew }) {
     }
   };
   
-  // Format date display
+  // Format date display with improved validation
   const formatDate = (dateString) => {
     if (!dateString) return 'No deadline';
-    const options = { year: 'numeric', month: 'short', day: 'numeric' };
-    return new Date(dateString).toLocaleDateString('en-US', options);
+    
+    try {
+      const options = { year: 'numeric', month: 'short', day: 'numeric' };
+      const date = new Date(dateString);
+      
+      // Check if date is valid
+      if (isNaN(date.getTime())) {
+        console.warn('Invalid date:', dateString);
+        return 'No deadline';
+      }
+      
+      return date.toLocaleDateString('en-US', options);
+    } catch (error) {
+      console.error('Error formatting date:', error, dateString);
+      return 'No deadline';
+    }
   };
   
   // Get status badge variant
@@ -289,29 +518,21 @@ function ManageJobs({ isNew }) {
     return calculateDaysRemaining(job.deadline) <= 0;
   };
   
-  // Filter jobs by status
-  const pendingJobs = jobs.filter(job => job.status === 'Pending');
+  // Consolidate jobs into two main categories: Open and Closed
   
-  // Active jobs are those with "Active" status and not past deadline
-  const activeJobs = jobs.filter(job => {
-    if (job.status !== 'Active') return false;
-    return !isJobClosed(job);
-  });
-  
-  // Closed jobs are those with "Closed" status OR "Active" but past deadline
+  // Closed jobs are those with "Closed" status OR past deadline
   const closedJobs = jobs.filter(job => {
     if (job.status === 'Closed') return true;
     if (job.status === 'Active' && isJobClosed(job)) return true;
     return false;
   });
   
-  const rejectedJobs = jobs.filter(job => job.status === 'Rejected');
+  // Open jobs are all Active jobs that aren't closed
+  const openJobs = jobs.filter(job => !closedJobs.includes(job));
   
   console.log('Job status counts:', {
-    pending: pendingJobs.length,
-    active: activeJobs.length,
+    open: openJobs.length,
     closed: closedJobs.length,
-    rejected: rejectedJobs.length,
     total: jobs.length
   });
   
@@ -519,39 +740,21 @@ function ManageJobs({ isNew }) {
               <Card.Body>
                 <h5 className="mb-3">Job Status Overview</h5>
                 <Row>
-                  <Col xs={6} md={3} className="mb-3 mb-md-0">
+                  <Col xs={6}>
                     <div className="d-flex align-items-center">
                       <div className="bg-success me-3" style={{ width: '10px', height: '40px', borderRadius: '3px' }}></div>
                       <div>
-                        <div className="h3 mb-0">{activeJobs.length}</div>
-                        <div className="text-muted">Active</div>
+                        <div className="h3 mb-0">{openJobs.length}</div>
+                        <div className="text-muted">Open</div>
                       </div>
                     </div>
                   </Col>
-                  <Col xs={6} md={3} className="mb-3 mb-md-0">
-                    <div className="d-flex align-items-center">
-                      <div className="bg-warning me-3" style={{ width: '10px', height: '40px', borderRadius: '3px' }}></div>
-                      <div>
-                        <div className="h3 mb-0">{pendingJobs.length}</div>
-                        <div className="text-muted">Pending</div>
-                      </div>
-                    </div>
-                  </Col>
-                  <Col xs={6} md={3}>
+                  <Col xs={6}>
                     <div className="d-flex align-items-center">
                       <div className="bg-secondary me-3" style={{ width: '10px', height: '40px', borderRadius: '3px' }}></div>
                       <div>
                         <div className="h3 mb-0">{closedJobs.length}</div>
                         <div className="text-muted">Closed</div>
-                      </div>
-                    </div>
-                  </Col>
-                  <Col xs={6} md={3}>
-                    <div className="d-flex align-items-center">
-                      <div className="bg-danger me-3" style={{ width: '10px', height: '40px', borderRadius: '3px' }}></div>
-                      <div>
-                        <div className="h3 mb-0">{rejectedJobs.length}</div>
-                        <div className="text-muted">Rejected</div>
                       </div>
                     </div>
                   </Col>
@@ -573,20 +776,20 @@ function ManageJobs({ isNew }) {
       )}
       
       {jobs.length > 0 && (
-        <Tabs defaultActiveKey="active" className="mb-4 nav-fill">
-          <Tab eventKey="active" title={
+        <Tabs defaultActiveKey="open" className="mb-4 nav-fill">
+          <Tab eventKey="open" title={
             <div className="d-flex align-items-center">
-              <span className="badge bg-success me-2">{activeJobs.length}</span>
-              <span>Active</span>
+              <span className="badge bg-success me-2">{openJobs.length}</span>
+              <span>Open</span>
             </div>
           }>
             <Card className="border-0 shadow-sm">
               <Card.Body>
                 <ListGroup>
-                  {activeJobs.length === 0 ? (
-                    <Alert variant="info">You don't have any active job postings.</Alert>
+                  {openJobs.length === 0 ? (
+                    <Alert variant="info">You don't have any open job postings.</Alert>
                   ) : (
-                    activeJobs.map(job => (
+                    openJobs.map(job => (
                       <ListGroup.Item key={job.jobId} className="border mb-3">
                         <div className="d-flex justify-content-between align-items-start">
                           <div>
@@ -598,7 +801,9 @@ function ManageJobs({ isNew }) {
                             </div>
                             <small>
                               Deadline: {formatDate(job.deadline)} 
-                              ({calculateDaysRemaining(job.deadline)} days remaining)
+                              {job.deadline && calculateDaysRemaining(job.deadline) > 0 ? 
+                                ` (${calculateDaysRemaining(job.deadline)} days remaining)` : 
+                                ''}
                             </small>
                           </div>
                           <div>
@@ -612,56 +817,13 @@ function ManageJobs({ isNew }) {
                               Edit
                             </Button>
                             <Button 
-                              variant="outline-danger" 
+                              variant="outline-secondary" 
                               size="sm" 
-                              onClick={() => handleDeleteJob(job.jobId)}
-                            >
-                              Delete
-                            </Button>
-                          </div>
-                        </div>
-                      </ListGroup.Item>
-                    ))
-                  )}
-                </ListGroup>
-              </Card.Body>
-            </Card>
-          </Tab>
-          
-          <Tab eventKey="pending" title={
-            <div className="d-flex align-items-center">
-              <span className="badge bg-warning me-2">{pendingJobs.length}</span>
-              <span>Pending</span>
-            </div>
-          }>
-            <Card className="border-0 shadow-sm">
-              <Card.Body>
-                <ListGroup>
-                  {pendingJobs.length === 0 ? (
-                    <Alert variant="info">You don't have any pending job postings.</Alert>
-                  ) : (
-                    pendingJobs.map(job => (
-                      <ListGroup.Item key={job.jobId} className="border mb-3">
-                        <div className="d-flex justify-content-between align-items-start">
-                          <div>
-                            <h5>{job.jobTitle}</h5>
-                            <div className="d-flex gap-2 mb-2">
-                              <Badge bg='warning'>
-                                Awaiting Approval
-                              </Badge>
-                              <Badge bg="secondary">{job.location}</Badge>
-                              <Badge bg="secondary">{formatSalary(job.salary)}</Badge>
-                            </div>
-                          </div>
-                          <div>
-                            <Button 
-                              as={Link} 
-                              to={`/manage-jobs/${job.jobId}`} 
-                              variant="outline-primary" 
-                              size="sm" 
+                              onClick={() => handleCloseJob(job.jobId)}
                               className="me-2"
                             >
-                              Edit
+                              <i className="bi bi-x-circle me-1"></i>
+                              Close
                             </Button>
                             <Button 
                               variant="outline-danger" 
@@ -708,67 +870,6 @@ function ManageJobs({ isNew }) {
                             </small>
                           </div>
                           <div>
-                            <Button 
-                              variant="outline-danger" 
-                              size="sm" 
-                              onClick={() => handleDeleteJob(job.jobId)}
-                            >
-                              Delete
-                            </Button>
-                          </div>
-                        </div>
-                      </ListGroup.Item>
-                    ))
-                  )}
-                </ListGroup>
-              </Card.Body>
-            </Card>
-          </Tab>
-          
-          <Tab eventKey="rejected" title={
-            <div className="d-flex align-items-center">
-              <span className="badge bg-danger me-2">{rejectedJobs.length}</span>
-              <span>Rejected</span>
-            </div>
-          }>
-            <Card className="border-0 shadow-sm">
-              <Card.Body>
-                <ListGroup>
-                  {rejectedJobs.length === 0 ? (
-                    <Alert variant="info">You don't have any rejected job postings.</Alert>
-                  ) : (
-                    rejectedJobs.map(job => (
-                      <ListGroup.Item key={job.jobId} className="border mb-3">
-                        <div className="d-flex justify-content-between align-items-start">
-                          <div>
-                            <h5>{job.jobTitle}</h5>
-                            <div className="d-flex gap-2 mb-2">
-                              <Badge bg="danger">Rejected</Badge>
-                              <Badge bg="secondary">{job.location}</Badge>
-                              <Badge bg="secondary">{formatSalary(job.salary)}</Badge>
-                            </div>
-                            {job.feedback && (
-                              <Alert variant="danger" className="mt-2 mb-2">
-                                <strong>Moderator Feedback:</strong> {job.feedback}
-                              </Alert>
-                            )}
-                            <div className="mt-2">
-                              <p className="text-muted small">
-                                <i className="bi bi-info-circle me-1"></i>
-                                Edit this job posting according to the moderator's feedback and resubmit for approval.
-                              </p>
-                            </div>
-                          </div>
-                          <div>
-                            <Button 
-                              as={Link} 
-                              to={`/manage-jobs/${job.jobId}`} 
-                              variant="outline-primary" 
-                              size="sm" 
-                              className="me-2"
-                            >
-                              Edit & Resubmit
-                            </Button>
                             <Button 
                               variant="outline-danger" 
                               size="sm" 

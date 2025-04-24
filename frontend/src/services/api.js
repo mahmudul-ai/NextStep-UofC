@@ -53,13 +53,10 @@ const apiService = {
         })
         .catch(error => {
           // If the error includes a specific message about duplicate keys
-          if (
-            error.response?.data &&
-            (
-              (typeof error.response.data === 'string' && error.response.data.includes('duplicate key')) ||
-              (error.response?.data?.message && error.response.data.message.includes('duplicate key'))
-            )
-          ){
+          // If the error includes a specific message about duplicate keys
+          if (error.response?.data && 
+            (typeof error.response.data === 'string' && error.response.data.includes('duplicate key')) ||
+            (error.response?.data?.message && error.response.data.message.includes('duplicate key'))) {
           
             console.error('Employer registration error (duplicate key):', error);
             

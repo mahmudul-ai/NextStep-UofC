@@ -14,17 +14,16 @@ import JobApplicationForm from './components/JobApplicationForm';
 import ViewApplications from './components/ViewApplications';
 import Forum from './components/Forum';
 
-// Import new components
 import StudentDashboard from './components/StudentDashboard';
 import EmployerDashboard from './components/EmployerDashboard';
 import JobDetail from './components/JobDetail';
 import StudentVerificationQueue from './components/StudentVerificationQueue';
 import EmployerVerificationQueue from './components/EmployerVerificationQueue';
 import JobModerationPage from './components/JobModerationPage';
+import CompanyApplications from './components/CompanyApplications';
 
 // Add new imports for our components
 import ApplicationHistory from './components/ApplicationHistory';
-import SavedJobs from './components/SavedJobs';
 
 // Add new import for ApplicationDetail
 import ApplicationDetail from './components/ApplicationDetail';
@@ -136,12 +135,6 @@ function App() {
           </ProtectedRoute>
         } />
         
-        <Route path="/saved-jobs" element={
-          <ProtectedRoute requiredRoles={['student']}>
-            <SavedJobs />
-          </ProtectedRoute>
-        } />
-        
         {/* Add route for ApplicationDetail */}
         <Route path="/applications/:id" element={
           <ProtectedRoute requiredRoles={['student', 'employer']}>
@@ -177,6 +170,12 @@ function App() {
         <Route path="/create-job" element={
           <ProtectedRoute requiredRoles={['employer']}>
             <CreateJobPosting />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/company-applications" element={
+          <ProtectedRoute requiredRoles={['employer']}>
+            <CompanyApplications />
           </ProtectedRoute>
         } />
         

@@ -1,11 +1,9 @@
-// Import React and Bootstrap components for layout and styling
 import React, { useState, useEffect } from 'react';
 import { Navbar, Nav, Container, Button, NavDropdown } from 'react-bootstrap';
 import { NavLink } from 'react-router-dom';
 import api from '../services/api';
 
 function NavigationBar({ token, user, onLogout }) {
-  // Get user role from localStorage (set during login)
   const userRole = localStorage.getItem('userRole'); // e.g., "student" or "employer" or "moderator"
   const [userDetails, setUserDetails] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -105,14 +103,13 @@ function NavigationBar({ token, user, onLogout }) {
                 {userRole === 'student' && (
                   <>
                     <Nav.Link as={NavLink} to="/application-history">My Applications</Nav.Link>
-                    <Nav.Link as={NavLink} to="/saved-jobs">Saved Jobs</Nav.Link>
                   </>
                 )}
                 
                 {userRole === 'employer' && (
                   <>
                     <Nav.Link as={NavLink} to="/manage-jobs">Manage Jobs</Nav.Link>
-                    <Nav.Link as={NavLink} to="/applications">View Applicants</Nav.Link>
+                    <Nav.Link as={NavLink} to="/company-applications">View Applicants</Nav.Link>
                   </>
                 )}
                 

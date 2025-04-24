@@ -162,18 +162,7 @@ function Register() {
             <Card.Body>
               <h3 className="mb-4 text-center">Register</h3>
               
-              {error && <Alert variant="danger">{error}</Alert>}
-              {warning && <Alert variant="warning">{warning}</Alert>}
-              {showSwitchOption && (
-                <div className="d-grid my-3">
-                  <Button 
-                    variant="warning" 
-                    onClick={handleSwitchToStudent}
-                  >
-                    Switch to Student Registration
-                  </Button>
-                </div>
-              )}
+              
               {success && (
                 <Alert variant="success">
                   Registration successful! Redirecting to login...
