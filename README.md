@@ -17,11 +17,11 @@ Create a vitual environment:
 
     python -m venv .venv
 
-Activate vitual environment (windows):
+Activate vitual environment (Windows):
 
     .venv\Scripts\activate
 
-Activate vitual environment  (Mac):
+Activate vitual environment (Mac/Linux):
 
     source .venv/bin/activate
 
