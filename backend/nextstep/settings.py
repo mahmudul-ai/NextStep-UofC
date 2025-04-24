@@ -30,8 +30,6 @@ INSTALLED_APPS = [
     'django_filters',
 
     # Your apps
-    'accounts',
-    'jobs',
     'api',
 ]
 

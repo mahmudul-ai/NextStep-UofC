@@ -25,7 +25,7 @@ function BrowseJobs() {
         // Extract filter values from URL params
         const urlFilters = {};
         const employerParam = searchParams.get('employer');
-        const keywordParam = searchParams.get('search');
+        const keywordParam = searchParams.get('keyword');
         const locationParam = searchParams.get('location');
         const minSalaryParam = searchParams.get('minSalary');
         const maxSalaryParam = searchParams.get('maxSalary');
@@ -102,7 +102,7 @@ function BrowseJobs() {
     // Update search params
     const newSearchParams = {};
     
-    if (filterData.keyword) newSearchParams.search = filterData.keyword;
+    if (filterData.keyword) newSearchParams.keyword = filterData.keyword;
     if (filterData.location) newSearchParams.location = filterData.location;
     if (filterData.minSalary) newSearchParams.minSalary = filterData.minSalary;
     if (filterData.maxSalary) newSearchParams.maxSalary = filterData.maxSalary;

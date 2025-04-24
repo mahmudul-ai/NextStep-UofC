@@ -58,7 +58,7 @@ function JobSearchFilters({ onApplyFilters, initialFilters = {} }) {
       }
     });
   
-    onApplyFilters(filterData); // pass keyword as 'keyword', not 'search'
+    onApplyFilters(filterData); 
   };
 
   return (
