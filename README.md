@@ -17,9 +17,13 @@ Create a vitual environment:
 
     python -m venv .venv
 
-Activate vitual environment:
+Activate vitual environment (windows):
 
     .venv\Scripts\activate
+
+Activate vitual environment  (Mac):
+
+    source .venv/bin/activate
 
 Move to the backend directory:
 
