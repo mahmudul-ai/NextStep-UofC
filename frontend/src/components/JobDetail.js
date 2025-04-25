@@ -61,15 +61,14 @@ function JobDetail() {
         if (userRole === 'student' && ucid) {
           try {
             // Check applications
-            const applicationsResponse = await api.getApplications({ 
-              applicantUcid: ucid,
-              jobId: parseInt(id)
-            });
+            const applicationsResponse = await api.getApplications();
+              
             
             // If any applications exist for this job, user has already applied
             const hasApplied = applicationsResponse.data && 
               applicationsResponse.data.some(app => 
-                (app.JobID === parseInt(id) || app.jobId === parseInt(id))
+                app.ApplicantUCID === parseInt(ucid) && 
+                app.JobID === parseInt(id)
               );
             
             setAlreadyApplied(hasApplied);
